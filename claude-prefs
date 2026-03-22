@@ -1061,7 +1061,18 @@ cmd_setup() {
   fi
 
   echo ""
-  echo -e "${GREEN}Done!${NC} Run ${CYAN}claude-prefs init${NC} in a project to install memories and skills."
+  echo -e "${GREEN}Global setup complete!${NC}"
+
+  # Ask to init current project
+  if [[ -t 0 ]]; then
+    echo ""
+    read -rp "Initialize current project? [Y/n] " answer
+    answer="${answer:-y}"
+    if [[ "$answer" =~ ^[Yy] ]]; then
+      echo ""
+      cmd_init "$@"
+    fi
+  fi
 }
 
 # ---------------------------------------------------------------------------
