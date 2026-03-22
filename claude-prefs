@@ -926,14 +926,65 @@ skills_list_here() {
   echo -e "${DIM}$count skills linked${NC}"
 }
 
+skills_install_all() {
+  local agents_dir="$HOME/.agents/skills"
+  local not_installed=0
+  local total=0
+
+  # Count uninstalled
+  while IFS='|' read -r repo skill flags; do
+    local skill_name="${skill:-$(basename "$repo")}"
+    total=$((total + 1))
+    [[ ! -d "$agents_dir/$skill_name" ]] && not_installed=$((not_installed + 1))
+  done < <(python3 -c "
+import json
+skills = json.load(open('$SKILLS_FILE'))
+for s in skills:
+    print(s['repo'] + '|' + s.get('skill', '') + '|' + s.get('flags', ''))
+" 2>/dev/null)
+
+  if [[ $total -eq 0 ]]; then
+    echo -e "${DIM}No skills saved. Use 'claude-prefs skills install <name>' to add one.${NC}"
+    return
+  fi
+
+  if [[ $not_installed -eq 0 ]]; then
+    echo -e "${GREEN}All $total skills already downloaded${NC}"
+    return
+  fi
+
+  echo -e "${BOLD}Downloading $not_installed of $total skills...${NC}"
+  echo ""
+
+  while IFS='|' read -r repo skill flags; do
+    local skill_name="${skill:-$(basename "$repo")}"
+    [[ -d "$agents_dir/$skill_name" ]] && continue
+
+    echo -e "  ${CYAN}↓${NC} $skill_name"
+    local install_flags="-y -g"
+    [[ -n "$skill" ]] && install_flags="$install_flags --skill $skill"
+    [[ -n "$flags" ]] && install_flags="$install_flags $flags"
+    npx skills add "$repo" $install_flags 2>&1 | sed 's/^/    /'
+  done < <(python3 -c "
+import json
+skills = json.load(open('$SKILLS_FILE'))
+for s in skills:
+    print(s['repo'] + '|' + s.get('skill', '') + '|' + s.get('flags', ''))
+" 2>/dev/null)
+
+  echo ""
+  echo -e "${GREEN}Done${NC}"
+}
+
 skills_install() {
   local input="${1:-}"
   shift 2>/dev/null || true
   local flags="$*"
 
   if [[ -z "$input" ]]; then
-    echo -e "${RED}Usage: claude-prefs skills install <name or owner/repo> [--skill name]${NC}"
-    exit 1
+    # No name given - download all uninstalled skills from global list
+    skills_install_all
+    return
   fi
 
   local repo=""
@@ -1625,7 +1676,7 @@ cmd_help() {
   echo ""
   echo -e "${BOLD}SKILLS${NC} (skills.sh)"
   echo -e "  ${CYAN}skills list${NC} [here]        List saved skills (or current project's)"
-  echo -e "  ${CYAN}skills install${NC} <name>    Search, download, and add to global list"
+  echo -e "  ${CYAN}skills install${NC} [name]    Download all saved, or search and add by name"
   echo -e "  ${CYAN}skills add${NC} [-y]          Add saved skills to current project (picker)"
   echo -e "  ${CYAN}skills remove${NC} [name]     Remove a skill from global list (picker)"
   echo -e "  ${CYAN}skills remove here${NC} [name] Unlink skills from current project (picker)"
