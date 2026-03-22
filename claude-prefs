@@ -1475,8 +1475,52 @@ else:
     print(f'    \033[0;90mAll {skipped} default skills already loaded\033[0m')
 " 2>/dev/null
 
+  # Check for uninstalled skills
+  local agents_dir="$HOME/.agents/skills"
+  local not_installed=0
+  local total_skills=0
+  while IFS='|' read -r skill_name; do
+    [[ -z "$skill_name" ]] && continue
+    total_skills=$((total_skills + 1))
+    [[ ! -d "$agents_dir/$skill_name" ]] && not_installed=$((not_installed + 1))
+  done < <(python3 -c "
+import json
+skills = json.load(open('$SKILLS_FILE'))
+for s in skills:
+    print(s.get('skill', '') or s['repo'].split('/')[-1])
+" 2>/dev/null)
+
   echo ""
-  echo -e "${GREEN}Done!${NC} Run ${CYAN}claude-prefs init${NC} to add memories and skills to a project."
+  if [[ $not_installed -gt 0 ]]; then
+    echo -e "${YELLOW}$not_installed of $total_skills skills not yet downloaded.${NC}"
+    read -rp "Download them now? [Y/n] " answer
+    answer="${answer:-y}"
+    if [[ "$answer" =~ ^[Yy] ]]; then
+      echo ""
+      # Download all uninstalled skills
+      while IFS='|' read -r repo skill flags; do
+        local skill_name="${skill:-$(basename "$repo")}"
+        [[ -d "$agents_dir/$skill_name" ]] && continue
+
+        echo -e "  ${CYAN}↓${NC} $skill_name"
+        local install_flags="-y -g"
+        [[ -n "$skill" ]] && install_flags="$install_flags --skill $skill"
+        [[ -n "$flags" ]] && install_flags="$install_flags $flags"
+        npx skills add "$repo" $install_flags 2>&1 | sed 's/^/    /'
+      done < <(python3 -c "
+import json
+skills = json.load(open('$SKILLS_FILE'))
+for s in skills:
+    print(s['repo'] + '|' + s.get('skill', '') + '|' + s.get('flags', ''))
+" 2>/dev/null)
+      echo ""
+      echo -e "${GREEN}Done!${NC} Run ${CYAN}claude-prefs init${NC} to add skills to a project."
+    else
+      echo -e "${DIM}Run 'claude-prefs init' to download and add skills to a project.${NC}"
+    fi
+  else
+    echo -e "${GREEN}Done!${NC} Run ${CYAN}claude-prefs init${NC} to add memories and skills to a project."
+  fi
 }
 
 # Silent version for setup - loads defaults without the "run skills install" message
