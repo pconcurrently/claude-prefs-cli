@@ -840,7 +840,7 @@ cmd_skills() {
   shift || true
 
   case "$subcmd" in
-    list)    skills_list ;;
+    list)    skills_list "$@" ;;
     add)     skills_add "$@" ;;
     remove)  skills_remove "$@" ;;
     install) skills_install "$@" ;;
@@ -853,6 +853,13 @@ cmd_skills() {
 }
 
 skills_list() {
+  local scope="${1:-global}"
+
+  if [[ "$scope" == "here" ]]; then
+    skills_list_here
+    return
+  fi
+
   echo -e "${BOLD}Global Skills List${NC}"
   echo ""
 
@@ -877,6 +884,46 @@ for s in skills:
 
   echo ""
   echo -e "${DIM}$count skills saved${NC}"
+}
+
+skills_list_here() {
+  local git_root
+  git_root=$(get_git_root "$(pwd)")
+  local project_skills_dir="$git_root/.claude/skills"
+  local project_name
+  project_name=$(basename "$git_root")
+
+  echo -e "${BOLD}Project Skills${NC} ${DIM}($project_name)${NC}"
+  echo ""
+
+  if [[ ! -d "$project_skills_dir" ]]; then
+    echo -e "  ${DIM}(none - use 'claude-prefs skills add' to add skills to this project)${NC}"
+    return
+  fi
+
+  local count=0
+  for entry in "$project_skills_dir"/*/; do
+    [[ ! -d "$entry" ]] && continue
+    local name
+    name=$(basename "$entry")
+
+    if [[ -L "${entry%/}" || -L "$project_skills_dir/$name" ]]; then
+      local target
+      target=$(readlink "$project_skills_dir/$name" 2>/dev/null || echo "")
+      echo -e "  ${CYAN}$name${NC} ${DIM}-> $target${NC}"
+    else
+      echo -e "  ${CYAN}$name${NC}"
+    fi
+    count=$((count + 1))
+  done
+
+  if [[ $count -eq 0 ]]; then
+    echo -e "  ${DIM}(none - use 'claude-prefs skills add' to add skills to this project)${NC}"
+    return
+  fi
+
+  echo ""
+  echo -e "${DIM}$count skills linked${NC}"
 }
 
 skills_install() {
@@ -1456,7 +1503,7 @@ cmd_help() {
   echo -e "  ${CYAN}import${NC} [here|all]        Import memories from project(s) to global"
   echo ""
   echo -e "${BOLD}SKILLS${NC} (skills.sh)"
-  echo -e "  ${CYAN}skills list${NC}              List saved skills"
+  echo -e "  ${CYAN}skills list${NC} [here]        List saved skills (or current project's)"
   echo -e "  ${CYAN}skills install${NC} <name>    Search, download, and add to global list"
   echo -e "  ${CYAN}skills add${NC} [-y]          Add saved skills to current project (picker)"
   echo -e "  ${CYAN}skills remove${NC} <name>     Remove a skill from global list"
