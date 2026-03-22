@@ -1415,13 +1415,14 @@ defaults_load() {
   # Load default memories
   echo -e "  ${BOLD}Memories:${NC}"
   local mem_count=0
+  local mem_skipped=0
   for file in "$DEFAULTS_DIR/memories"/*.md; do
     [[ ! -f "$file" ]] && continue
     local filename
     filename=$(basename "$file")
 
     if [[ -f "$GLOBAL_DIR/$filename" ]]; then
-      echo -e "    ${DIM}$filename - already exists, skipping${NC}"
+      mem_skipped=$((mem_skipped + 1))
       continue
     fi
 
@@ -1429,7 +1430,11 @@ defaults_load() {
     echo -e "    ${GREEN}+ $filename${NC}"
     mem_count=$((mem_count + 1))
   done
-  echo -e "    ${GREEN}Added $mem_count memories${NC}"
+  if [[ $mem_count -gt 0 ]]; then
+    echo -e "    ${GREEN}Added $mem_count new memories${NC}"
+  else
+    echo -e "    ${DIM}All $mem_skipped default memories already loaded${NC}"
+  fi
 
   # Load default skills
   echo ""
@@ -1450,26 +1455,28 @@ for s in existing:
     existing_set.add((s['repo'], s.get('skill', '')))
 
 added = 0
+skipped = 0
 for s in defaults:
     key = (s['repo'], s.get('skill', ''))
     if key not in existing_set:
         existing.append(s)
         existing_set.add(key)
         skill = s.get('skill', '')
-        label = f'{s[\"repo\"]} --skill {skill}' if skill else s['repo']
+        label = f'{s[\"repo\"]} / {skill}' if skill else s['repo']
         print(f'    \033[0;32m+ {label}\033[0m')
         added += 1
     else:
-        skill = s.get('skill', '')
-        label = f'{s[\"repo\"]} --skill {skill}' if skill else s['repo']
-        print(f'    \033[0;90m{label} - already exists, skipping\033[0m')
+        skipped += 1
 
 json.dump(existing, open('$SKILLS_FILE', 'w'), indent=2)
-print(f'    \033[0;32mAdded {added} skills\033[0m')
+if added > 0:
+    print(f'    \033[0;32mAdded {added} new skills\033[0m')
+else:
+    print(f'    \033[0;90mAll {skipped} default skills already loaded\033[0m')
 " 2>/dev/null
 
   echo ""
-  echo -e "${GREEN}Done!${NC} Run ${CYAN}claude-prefs skills install${NC} to install the skills."
+  echo -e "${GREEN}Done!${NC} Run ${CYAN}claude-prefs init${NC} to add memories and skills to a project."
 }
 
 # Silent version for setup - loads defaults without the "run skills install" message
