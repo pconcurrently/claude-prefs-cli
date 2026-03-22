@@ -410,14 +410,63 @@ cmd_add() {
 }
 
 cmd_remove() {
-  local filename="$1"
+  local pattern="$1"
 
-  if [[ -f "$GLOBAL_DIR/$filename" ]]; then
-    rm "$GLOBAL_DIR/$filename"
-    echo -e "${GREEN}Removed from global:${NC} $filename"
-  else
-    echo -e "${RED}Not found in global memories: $filename${NC}"
+  if [[ -z "$pattern" ]]; then
+    echo -e "${RED}Usage: claude-prefs remove <filename or pattern>${NC}"
     exit 1
+  fi
+
+  # Exact match first
+  if [[ -f "$GLOBAL_DIR/$pattern" ]]; then
+    rm "$GLOBAL_DIR/$pattern"
+    echo -e "${GREEN}Removed from global:${NC} $pattern"
+    return
+  fi
+
+  # Fuzzy match - find files containing the pattern
+  local matches=()
+  while IFS= read -r file; do
+    matches+=("$file")
+  done < <(find "$GLOBAL_DIR" -maxdepth 1 -type f -name "*${pattern}*" 2>/dev/null | sort)
+
+  if [[ ${#matches[@]} -eq 0 ]]; then
+    echo -e "${RED}No memories matching: $pattern${NC}"
+    exit 1
+  fi
+
+  echo -e "${BOLD}Memories matching '${pattern}':${NC}"
+  echo ""
+  for i in "${!matches[@]}"; do
+    local name
+    name=$(basename "${matches[$i]}")
+    local desc
+    desc=$(get_memory_description "${matches[$i]}")
+    echo -e "  $((i + 1)). ${CYAN}$name${NC}  ${DIM}$desc${NC}"
+  done
+  echo ""
+
+  if [[ ${#matches[@]} -eq 1 ]]; then
+    read -rp "Remove this memory? [Y/n] " answer
+    answer="${answer:-y}"
+    if [[ "$answer" =~ ^[Yy] ]]; then
+      rm "${matches[0]}"
+      echo -e "${GREEN}Removed:${NC} $(basename "${matches[0]}")"
+    fi
+  else
+    read -rp "Enter number to remove (or 'a' for all, empty to cancel): " choice
+    if [[ "$choice" == "a" || "$choice" == "A" ]]; then
+      for file in "${matches[@]}"; do
+        rm "$file"
+        echo -e "${GREEN}Removed:${NC} $(basename "$file")"
+      done
+    elif [[ "$choice" =~ ^[0-9]+$ && "$choice" -ge 1 && "$choice" -le ${#matches[@]} ]]; then
+      local idx=$((choice - 1))
+      rm "${matches[$idx]}"
+      echo -e "${GREEN}Removed:${NC} $(basename "${matches[$idx]}")"
+    else
+      echo -e "${DIM}Cancelled${NC}"
+    fi
   fi
 }
 
@@ -716,75 +765,174 @@ for s in skills:
 }
 
 skills_add() {
-  local repo="$1"
-  local flags="${2:-}"
+  local input="$1"
+  shift
+  local flags="$*"
 
-  if [[ -z "$repo" ]]; then
-    echo -e "${RED}Usage: claude-prefs skills add <owner/repo> [flags]${NC}"
-    echo "  Example: claude-prefs skills add anthropics/claude-code-skills"
+  if [[ -z "$input" ]]; then
+    echo -e "${RED}Usage: claude-prefs skills add <name or owner/repo> [--skill name]${NC}"
+    echo "  Example: claude-prefs skills add vercel-react-best-practices"
+    echo "  Example: claude-prefs skills add vercel-labs/agent-skills --skill web-design-guidelines"
     echo "  Example: claude-prefs skills add vercel-labs/agent-skills --all"
     exit 1
   fi
 
+  local repo=""
+  local skill=""
+
+  if [[ "$input" == *"/"* ]]; then
+    # owner/repo format - parse --skill from flags
+    repo="$input"
+    if [[ "$flags" == *"--skill "* ]]; then
+      skill=$(echo "$flags" | sed 's/.*--skill //' | awk '{print $1}')
+    fi
+  else
+    # Skill name - look it up via npx skills find
+    echo -e "${DIM}Searching for '$input'...${NC}"
+    local find_result
+    find_result=$(npx --yes skills find "$input" 2>/dev/null | head -20)
+
+    # Parse top result: owner/repo@skill format (strip ANSI codes)
+    local top_match
+    top_match=$(echo "$find_result" | sed 's/\x1b\[[0-9;]*m//g' | grep -m1 '@' | awk '{print $1}')
+
+    if [[ -z "$top_match" ]]; then
+      echo -e "${RED}No skills found matching '$input'${NC}"
+      return 1
+    fi
+
+    repo="${top_match%@*}"
+    skill="${top_match#*@}"
+    echo -e "${GREEN}Found:${NC} $repo --skill $skill"
+  fi
+
+  # Check for duplicates on (repo, skill) pair
   local exists
   exists=$(python3 -c "
 import json
 skills = json.load(open('$SKILLS_FILE'))
-print('yes' if any(s['repo'] == '$repo' for s in skills) else 'no')
+print('yes' if any(s['repo'] == '$repo' and s.get('skill', '') == '$skill' for s in skills) else 'no')
 " 2>/dev/null || echo "no")
 
   if [[ "$exists" == "yes" ]]; then
-    echo -e "${YELLOW}Already in skills list:${NC} $repo"
+    local display="$repo"
+    [[ -n "$skill" ]] && display="$display / $skill"
+    echo -e "${YELLOW}Already in skills list:${NC} $display"
     return
   fi
 
   python3 -c "
 import json
+entry = {'repo': '$repo'}
+if '$skill': entry['skill'] = '$skill'
+if '$flags' and '--skill' not in '$flags': entry['flags'] = '$flags'
 skills = json.load(open('$SKILLS_FILE'))
-skills.append({'repo': '$repo', 'flags': '$flags'})
+skills.append(entry)
 json.dump(skills, open('$SKILLS_FILE', 'w'), indent=2)
 "
 
-  echo -e "${GREEN}Added to skills list:${NC} $repo"
-  [[ -n "$flags" ]] && echo -e "${DIM}Flags: $flags${NC}"
+  local display="$repo"
+  [[ -n "$skill" ]] && display="$display / $skill"
+  echo -e "${GREEN}Added to skills list:${NC} $display"
 
   echo ""
   read -rp "Install now? [Y/n] " answer
   answer="${answer:-y}"
   if [[ "$answer" =~ ^[Yy] ]]; then
     echo ""
-    npx skills add "$repo" -g $flags
+    local install_flags="-y -g"
+    [[ -n "$skill" ]] && install_flags="$install_flags --skill $skill"
+    [[ -n "$flags" && "$flags" != *"--skill"* ]] && install_flags="$install_flags $flags"
+    npx skills add "$repo" $install_flags
   fi
 }
 
 skills_remove() {
-  local repo="$1"
+  local input="$1"
 
-  if [[ -z "$repo" ]]; then
-    echo -e "${RED}Usage: claude-prefs skills remove <owner/repo>${NC}"
+  if [[ -z "$input" ]]; then
+    echo -e "${RED}Usage: claude-prefs skills remove <name or pattern>${NC}"
     exit 1
   fi
 
-  local found
-  found=$(python3 -c "
+  # Find matching skills (exact or partial)
+  local matches
+  matches=$(python3 -c "
 import json
 skills = json.load(open('$SKILLS_FILE'))
-print('yes' if any(s['repo'] == '$repo' for s in skills) else 'no')
-" 2>/dev/null || echo "no")
+inp = '$input'
+found = []
+for i, s in enumerate(skills):
+    skill = s.get('skill', '')
+    repo = s['repo']
+    label = f'{repo} / {skill}' if skill else repo
+    if inp == skill or inp == repo:
+        found.append((i, label))
+    elif inp.lower() in skill.lower() or inp.lower() in repo.lower():
+        found.append((i, label))
+for idx, label in found:
+    print(f'{idx}|{label}')
+" 2>/dev/null)
 
-  if [[ "$found" == "no" ]]; then
-    echo -e "${RED}Not in skills list:${NC} $repo"
+  if [[ -z "$matches" ]]; then
+    echo -e "${RED}No skills matching: $input${NC}"
     exit 1
   fi
+
+  local -a match_indices=()
+  local -a match_labels=()
+  while IFS='|' read -r idx label; do
+    match_indices+=("$idx")
+    match_labels+=("$label")
+  done <<< "$matches"
+
+  echo -e "${BOLD}Skills matching '${input}':${NC}"
+  echo ""
+  for i in "${!match_labels[@]}"; do
+    echo -e "  $((i + 1)). ${CYAN}${match_labels[$i]}${NC}"
+  done
+  echo ""
+
+  local to_remove=()
+  if [[ ${#match_labels[@]} -eq 1 ]]; then
+    read -rp "Remove this skill? [Y/n] " answer
+    answer="${answer:-y}"
+    [[ "$answer" =~ ^[Yy] ]] && to_remove=("${match_indices[0]}")
+  else
+    read -rp "Enter number to remove (or 'a' for all, empty to cancel): " choice
+    if [[ "$choice" == "a" || "$choice" == "A" ]]; then
+      to_remove=("${match_indices[@]}")
+    elif [[ "$choice" =~ ^[0-9]+$ && "$choice" -ge 1 && "$choice" -le ${#match_labels[@]} ]]; then
+      to_remove=("${match_indices[$((choice - 1))]}")
+    fi
+  fi
+
+  if [[ ${#to_remove[@]} -eq 0 ]]; then
+    echo -e "${DIM}Cancelled${NC}"
+    return
+  fi
+
+  # Remove by indices (reverse order to preserve positions)
+  local indices_json
+  indices_json=$(printf '%s,' "${to_remove[@]}")
+  indices_json="[${indices_json%,}]"
 
   python3 -c "
 import json
 skills = json.load(open('$SKILLS_FILE'))
-skills = [s for s in skills if s['repo'] != '$repo']
+to_remove = sorted($indices_json, reverse=True)
+removed = []
+for idx in to_remove:
+    s = skills.pop(idx)
+    skill = s.get('skill', '')
+    label = f'{s[\"repo\"]} / {skill}' if skill else s['repo']
+    removed.append(label)
 json.dump(skills, open('$SKILLS_FILE', 'w'), indent=2)
-"
-
-  echo -e "${GREEN}Removed from skills list:${NC} $repo"
+for label in removed:
+    print(label)
+" 2>/dev/null | while IFS= read -r label; do
+    echo -e "${GREEN}Removed:${NC} $label"
+  done
 }
 
 skills_install() {
@@ -1116,8 +1264,8 @@ cmd_help() {
   echo ""
   echo -e "${BOLD}SKILLS COMMANDS${NC} (skills.sh)"
   echo -e "  ${CYAN}skills list${NC}              List saved skills"
-  echo -e "  ${CYAN}skills add${NC} <repo> [flags] Add a skill repo to global list"
-  echo -e "  ${CYAN}skills remove${NC} <repo>     Remove a skill from global list"
+  echo -e "  ${CYAN}skills add${NC} <name or repo> Add a skill (searches skills.sh by name)"
+  echo -e "  ${CYAN}skills remove${NC} <name or repo> Remove a skill from global list"
   echo -e "  ${CYAN}skills install${NC} [-y]      Install saved skills (interactive picker)"
   echo ""
   echo -e "${BOLD}DEFAULTS${NC}"
@@ -1134,9 +1282,10 @@ cmd_help() {
   echo -e "${BOLD}EXAMPLES${NC}"
   echo "  claude-prefs import all                    # Import all projects' memories"
   echo "  claude-prefs sync all                      # Push global memories to all projects"
-  echo "  claude-prefs setup ~/new-project           # Interactive setup for new project"
-  echo "  claude-prefs setup -y                      # Auto setup, install everything"
-  echo "  claude-prefs skills add anthropics/skills  # Save a skill repo"
+  echo "  claude-prefs init                          # Init current project (memories + skills)"
+  echo "  claude-prefs setup                         # Load defaults into global store"
+  echo "  claude-prefs skills add conventional-commit # Search and add a skill by name"
+  echo "  claude-prefs skills add vercel-labs/agent-skills --skill web-design-guidelines"
   echo "  claude-prefs skills install                # Pick which skills to install"
 }
 

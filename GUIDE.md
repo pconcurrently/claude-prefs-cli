@@ -24,10 +24,11 @@ After importing, check what you have:
 claude-prefs list
 ```
 
-Remove anything project-specific that slipped through:
+Remove anything project-specific that slipped through. Supports fuzzy matching:
 
 ```bash
-claude-prefs remove feedback_sim_data_maker.md
+claude-prefs remove sim_data       # lists all matching memories
+claude-prefs remove feedback_sim_data_maker.md  # exact match
 ```
 
 ### Adding memories manually
@@ -96,18 +97,18 @@ claude-prefs skills install
 
 ## Managing skills
 
-### Save a skill repo
+### Add a skill by name
 
 ```bash
-claude-prefs skills add anthropics/claude-code-skills
+claude-prefs skills add conventional-commit
 ```
 
-You'll be asked if you want to install it immediately. The repo is saved to your global list either way.
+This searches [skills.sh](https://skills.sh/) and picks the top result. You'll be asked if you want to install it immediately.
 
-Pass extra flags for the `skills` CLI:
+You can also use the full `owner/repo` format with `--skill`:
 
 ```bash
-claude-prefs skills add vercel-labs/agent-skills --all
+claude-prefs skills add vercel-labs/agent-skills --skill web-design-guidelines
 ```
 
 ### View saved skills
@@ -126,8 +127,11 @@ Shows an interactive picker. Use `-y` to install all without prompting.
 
 ### Remove a skill
 
+Supports exact or fuzzy matching:
+
 ```bash
-claude-prefs skills remove vercel-labs/agent-skills
+claude-prefs skills remove conventional-commit
+claude-prefs skills remove dotnet    # lists all matching skills
 ```
 
 This removes it from your saved list only. It does not uninstall from existing projects.

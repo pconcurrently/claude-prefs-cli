@@ -34,8 +34,8 @@ claude-prefs list
 # Check current project's memories
 claude-prefs list here
 
-# Save some skill repos
-claude-prefs skills add vercel-labs/agent-skills --skill web-design-guidelines
+# Add a skill by name (searches skills.sh)
+claude-prefs skills add conventional-commit
 
 # Load defaults globally
 claude-prefs setup
@@ -54,13 +54,13 @@ Run `claude-prefs help` for the full list.
 | `list [here]` | List global memories, or current project's |
 | `status` | Show sync status across all projects |
 | `add <file>` | Add a memory file to the global store |
-| `remove <file>` | Remove a memory from the global store |
+| `remove <name or pattern>` | Remove a memory (supports fuzzy match) |
 | `init [dir]` | Initialize a project with memories + skills |
 | `sync [all\|here]` | Sync global memories to projects |
 | `import [here\|all]` | Import memories from project(s) to global |
 | `skills list` | List saved skill repos |
-| `skills add <repo> [flags]` | Add a skill repo to the global list |
-| `skills remove <repo>` | Remove a skill from the global list |
+| `skills add <name or repo>` | Add a skill (searches skills.sh by name) |
+| `skills remove <name or pattern>` | Remove a skill (supports fuzzy match) |
 | `skills install` | Install saved skills (interactive picker) |
 | `defaults list` | Preview bundled default memories and skills |
 | `defaults load` | Load bundled defaults into global store |
