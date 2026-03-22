@@ -1685,6 +1685,7 @@ cmd_help() {
   echo ""
   echo -e "${BOLD}USAGE${NC}"
   echo "  claude-prefs <command> [args]"
+  echo "  ccp <command> [args]"
   echo ""
   echo -e "${BOLD}GENERAL${NC}"
   echo -e "  ${CYAN}init${NC} [dir] [-y]          Initialize project with memories + skills"

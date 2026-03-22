@@ -39,8 +39,10 @@ fi
 
 # 2. Symlink the script
 ln -sf "$CLONE_DIR/$SCRIPT_NAME" "$INSTALL_DIR/$SCRIPT_NAME"
+ln -sf "$CLONE_DIR/$SCRIPT_NAME" "$INSTALL_DIR/ccp"
 chmod +x "$CLONE_DIR/$SCRIPT_NAME"
 echo -e "  ${GREEN}Installed to $INSTALL_DIR/$SCRIPT_NAME${NC}"
+echo -e "  ${GREEN}Alias: ccp${NC}"
 
 # 3. Add to PATH if needed
 SHELL_RC=""
@@ -76,6 +78,8 @@ perms = settings.setdefault('permissions', {})
 allow = perms.setdefault('allow', [])
 if 'Bash(claude-prefs *)' not in allow:
     allow.append('Bash(claude-prefs *)')
+if 'Bash(ccp *)' not in allow:
+    allow.append('Bash(ccp *)')
 with open('$SETTINGS_FILE', 'w') as f:
     json.dump(settings, f, indent=2)
     f.write('\n')
