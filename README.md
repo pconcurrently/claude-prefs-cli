@@ -152,6 +152,7 @@ All commands have non-interactive forms that work without a TTY, so Claude Code 
 - `list here` shows the current project's memories with sync status (synced, modified locally, local only).
 - **Skills** are managed via [skills.sh](https://skills.sh/) - `claude-prefs` saves your list and installs them with `npx skills add`.
 - **Updates** are checked automatically once per day. Run `ccp update` to pull the latest version and load any new bundled defaults.
+- **Claude Code integration** - install or setup writes a reference to `~/.claude/CLAUDE.md` so Claude Code knows about `ccp` in every project. All commands have non-interactive forms (`ccp add <name>`, `ccp skills add <name>`, `ccp init -y`) that Claude Code can call directly.
 
 ## License
 
