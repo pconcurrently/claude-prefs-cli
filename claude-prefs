@@ -837,15 +837,32 @@ json.dump(skills, open('$SKILLS_FILE', 'w'), indent=2)
   [[ -n "$skill" ]] && display="$display / $skill"
   echo -e "${GREEN}Added to skills list:${NC} $display"
 
-  echo ""
-  read -rp "Install now? [Y/n] " answer
-  answer="${answer:-y}"
-  if [[ "$answer" =~ ^[Yy] ]]; then
+  # Install and symlink to current project
+  local skill_name="${skill:-$(basename "$repo")}"
+  local agents_dir="$HOME/.agents/skills"
+  local git_root
+  git_root=$(get_git_root "$(pwd)")
+  local project_skills_dir="$git_root/.claude/skills"
+
+  # Fetch if not already downloaded
+  if [[ ! -d "$agents_dir/$skill_name" ]]; then
     echo ""
+    echo -e "${CYAN}↓${NC} Fetching $skill_name..."
     local install_flags="-y -g"
     [[ -n "$skill" ]] && install_flags="$install_flags --skill $skill"
     [[ -n "$flags" && "$flags" != *"--skill"* ]] && install_flags="$install_flags $flags"
-    npx skills add "$repo" $install_flags
+    npx skills add "$repo" $install_flags 2>&1 | sed 's/^/  /'
+  fi
+
+  # Symlink to current project
+  if [[ -d "$agents_dir/$skill_name" ]]; then
+    mkdir -p "$project_skills_dir"
+    if [[ ! -e "$project_skills_dir/$skill_name" ]]; then
+      ln -sf "$agents_dir/$skill_name" "$project_skills_dir/$skill_name"
+      echo -e "${GREEN}+${NC} Symlinked to ${DIM}$project_skills_dir/$skill_name${NC}"
+    else
+      echo -e "${DIM}-${NC} Already in project ${DIM}($project_skills_dir/$skill_name)${NC}"
+    fi
   fi
 }
 
