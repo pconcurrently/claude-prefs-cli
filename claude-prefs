@@ -1179,6 +1179,21 @@ for s in skills:
   indices_json="[${indices_json%,}]"
 
   echo ""
+
+  # Get skill names before removing from list
+  local -a removed_names=()
+  while IFS= read -r name; do
+    [[ -n "$name" ]] && removed_names+=("$name")
+  done < <(python3 -c "
+import json
+skills = json.load(open('$SKILLS_FILE'))
+to_remove = sorted($indices_json, reverse=True)
+for idx in to_remove:
+    s = skills[idx]
+    print(s.get('skill', '') or s['repo'].split('/')[-1])
+" 2>/dev/null)
+
+  # Remove from global list
   python3 -c "
 import json
 skills = json.load(open('$SKILLS_FILE'))
@@ -1194,6 +1209,14 @@ for label in removed:
     print(label)
 " 2>/dev/null | while IFS= read -r label; do
     echo -e "  ${GREEN}-${NC} $label"
+  done
+
+  # Remove downloaded files and global symlinks
+  local agents_dir="$HOME/.agents/skills"
+  local global_skills_dir="$CLAUDE_DIR/skills"
+  for name in "${removed_names[@]}"; do
+    [[ -e "$global_skills_dir/$name" ]] && rm -rf "$global_skills_dir/$name"
+    [[ -d "$agents_dir/$name" ]] && rm -rf "$agents_dir/$name"
   done
 
   echo ""
