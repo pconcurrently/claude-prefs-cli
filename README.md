@@ -33,26 +33,36 @@ This will:
 
 ## Quick start
 
-All commands work with both `claude-prefs` and `ccp`:
+All commands work with both `claude-prefs` and `ccp`.
+
+### First time (no memories or skills yet)
 
 ```bash
-# Import your existing memories from all projects into the global store
+# Load bundled default memories and skills into your global store
+ccp setup
+
+# Browse and install more skills from skills.sh
+ccp skills install conventional-commit
+ccp skills install api-design
+
+# Initialize your first project - picks which memories and skills to include
+cd ~/my-project
+ccp init
+```
+
+That's it - your project now has global memories and skills linked. Claude Code will use them automatically.
+
+### Already have memories across projects
+
+```bash
+# Import existing memories from all projects into the global store
 ccp import all
 
 # Review what was imported
 ccp list
 
-# Check current project's memories
-ccp list here
-
-# Install a skill by name (searches skills.sh)
-ccp skills install conventional-commit
-
-# Load defaults globally
-ccp setup
-
-# Initialize a project (memories + skills)
-cd ~/my-new-project
+# Sync global memories to a specific project
+cd ~/my-project
 ccp init
 ```
 
