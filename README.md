@@ -6,6 +6,14 @@ A CLI tool to manage global Claude Code memories and skills across all your proj
 
 **Solution:** `claude-prefs` maintains a central store of global memories and a saved skills list. Initialize any project in one command with an interactive picker to choose what to include.
 
+## Prerequisites
+
+[Claude Code](https://docs.anthropic.com/en/docs/claude-code) must be installed:
+
+```bash
+npm install -g @anthropic-ai/claude-code
+```
+
 ## Install
 
 One-liner:
@@ -16,11 +24,12 @@ curl -fsSL https://raw.githubusercontent.com/pconcurrently/claude-prefs-cli/main
 
 This will:
 
-1. Clone the repo to `~/.claude/claude-prefs-cli/`
-2. Symlink `claude-prefs` to `~/.claude/bin/`
-3. Add `~/.claude/bin` to your PATH
-4. Add `Bash(claude-prefs *)` permission to Claude Code settings
-5. Offer to load bundled default memories and skills
+1. Check that Claude Code is installed
+2. Clone the repo to `~/.claude/claude-prefs-cli/`
+3. Symlink `claude-prefs` to `~/.claude/bin/`
+4. Add `~/.claude/bin` to your PATH
+5. Add `Bash(claude-prefs *)` permission to Claude Code settings
+6. Offer to load bundled default memories and skills
 
 ## Quick start
 
