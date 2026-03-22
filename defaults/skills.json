@@ -23,5 +23,70 @@
     "repo": "vercel-labs/agent-skills",
     "skill": "vercel-cli-with-tokens",
     "description": "Vercel CLI usage with tokens"
+  },
+  {
+    "repo": "github/awesome-copilot",
+    "skill": "dotnet-best-practices",
+    "description": ".NET best practices and conventions"
+  },
+  {
+    "repo": "github/awesome-copilot",
+    "skill": "dotnet-design-pattern-review",
+    "description": ".NET design pattern review and guidance"
+  },
+  {
+    "repo": "github/awesome-copilot",
+    "skill": "csharp-async",
+    "description": "C# async/await patterns and best practices"
+  },
+  {
+    "repo": "github/awesome-copilot",
+    "skill": "csharp-xunit",
+    "description": "C# xUnit testing best practices"
+  },
+  {
+    "repo": "github/awesome-copilot",
+    "skill": "ef-core",
+    "description": "Entity Framework Core patterns and usage"
+  },
+  {
+    "repo": "wshobson/agents",
+    "skill": "typescript-advanced-types",
+    "description": "Advanced TypeScript type patterns"
+  },
+  {
+    "repo": "wshobson/agents",
+    "skill": "nodejs-backend-patterns",
+    "description": "Node.js backend architecture patterns"
+  },
+  {
+    "repo": "kadajett/agent-nestjs-skills",
+    "skill": "nestjs-best-practices",
+    "description": "NestJS framework best practices"
+  },
+  {
+    "repo": "supercent-io/skills-template",
+    "skill": "api-design",
+    "description": "API design principles and patterns"
+  },
+  {
+    "repo": "supercent-io/skills-template",
+    "skill": "backend-testing",
+    "description": "Backend testing strategies and patterns"
+  },
+  {
+    "repo": "supercent-io/skills-template",
+    "skill": "database-schema-design",
+    "description": "Database schema design best practices"
+  },
+  {
+    "repo": "github/awesome-copilot",
+    "skill": "sql-optimization",
+    "description": "SQL query optimization techniques"
+  },
+  {
+    "repo": "github/awesome-copilot",
+    "skill": "sql-code-review",
+    "description": "SQL code review guidelines"
   }
 ]

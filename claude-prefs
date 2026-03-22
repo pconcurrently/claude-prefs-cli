@@ -38,9 +38,13 @@ fi
 # Selected keys are written to stdout, one per line
 # ---------------------------------------------------------------------------
 
+# Multi-select picker that writes results to a temp file
+# Usage: multi_select <result_file> <prompt> <label1> <key1> <label2> <key2> ...
+# Selected keys are written to result_file, one per line
 multi_select() {
-  local prompt="$1"
-  shift
+  local result_file="$1"
+  local prompt="$2"
+  shift 2
 
   local -a labels=()
   local -a keys=()
@@ -63,8 +67,6 @@ multi_select() {
 
   # Save terminal state and hide cursor
   tput civis 2>/dev/null || true
-  local start_row
-  start_row=$(tput lines 2>/dev/null || echo 24)
 
   draw_menu() {
     # Move to start position and clear
@@ -143,10 +145,11 @@ multi_select() {
   # Restore cursor
   tput cnorm 2>/dev/null || true
 
-  # Output selected keys
+  # Write selected keys to result file
+  : > "$result_file"
   for i in $(seq 0 $((total - 1))); do
     if [[ ${selected[$i]} -eq 1 ]]; then
-      echo "${keys[$i]}"
+      echo "${keys[$i]}" >> "$result_file"
     fi
   done
 }
@@ -155,14 +158,20 @@ multi_select() {
 # Helpers
 # ---------------------------------------------------------------------------
 
-get_project_id() {
+get_git_root() {
   local dir="${1:-$(pwd)}"
+  git -C "$dir" rev-parse --show-toplevel 2>/dev/null || echo "$dir"
+}
+
+get_project_id() {
+  local dir
+  dir=$(get_git_root "${1:-$(pwd)}")
   echo "$dir" | sed 's|/|-|g'
 }
 
 get_project_memory_dir() {
   local project_id
-  project_id=$(get_project_id "${1:-$(pwd)}")
+  project_id=$(get_project_id "$(get_git_root "${1:-$(pwd)}")")
   echo "$PROJECTS_DIR/$project_id/memory"
 }
 
@@ -229,7 +238,9 @@ cmd_init() {
   local project_id
   project_id=$(get_project_id "${1:-$(pwd)}")
 
-  echo -e "${CYAN}Initializing project:${NC} $project_id"
+  local project_name
+  project_name=$(basename "$(get_git_root "${1:-$(pwd)}")")
+  echo -e "${CYAN}Initializing project:${NC} $project_name"
 
   mkdir -p "$target_dir"
   ensure_memory_index "$target_dir"
@@ -258,38 +269,65 @@ cmd_init() {
     return
   fi
 
-  # Interactive selection or auto with -y
+  # Interactive selection, auto with -y, or fallback for non-TTY
   local -a chosen_files=()
+  local tmp_result
+  tmp_result=$(mktemp)
+
   if has_yes_flag "$@"; then
     chosen_files=("${mem_keys[@]}")
-  else
+  elif [[ -t 0 ]]; then
     echo ""
     local picker_args=()
     for i in $(seq 0 $((${#mem_keys[@]} - 1))); do
       picker_args+=("${mem_labels[$i]}" "${mem_keys[$i]}")
     done
 
+    multi_select "$tmp_result" "Select memories to install:" "${picker_args[@]}"
     while IFS= read -r line; do
       [[ -n "$line" ]] && chosen_files+=("$line")
-    done < <(multi_select "Select memories to install:" "${picker_args[@]}")
+    done < "$tmp_result"
+    rm -f "$tmp_result"
     echo ""
+  else
+    # Non-interactive (piped, CI, or agent context) — select all
+    chosen_files=("${mem_keys[@]}")
   fi
 
+  # Spinner while syncing
+  local spin_chars='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
+  local spin_i=0
   local count=0
+
   for filename in "${chosen_files[@]}"; do
     local file="$GLOBAL_DIR/$filename"
     local description
     description=$(get_memory_description "$file")
 
+    printf "\r  ${CYAN}%s${NC} Syncing memories... (%d/%d)" "${spin_chars:spin_i:1}" "$((count + 1))" "${#chosen_files[@]}"
+    spin_i=$(( (spin_i + 1) % ${#spin_chars} ))
+
     cp "$file" "$target_dir/$filename"
     add_to_index "$target_dir/MEMORY.md" "$filename" "$description"
-    echo -e "  ${GREEN}+${NC} $filename"
     count=$((count + 1))
+  done
+  printf "\r\033[2K"
+
+  for filename in "${chosen_files[@]}"; do
+    echo -e "  ${GREEN}+${NC} $filename"
   done
 
   echo ""
   echo -e "${GREEN}Synced $count memories to project${NC}"
-  echo -e "${DIM}Location: $target_dir${NC}"
+  echo -e "${DIM}$target_dir${NC}"
+
+  # Install skills if any are saved
+  local skill_count
+  skill_count=$(python3 -c "import json; print(len(json.load(open('$SKILLS_FILE'))))" 2>/dev/null || echo "0")
+  if [[ "$skill_count" != "0" ]]; then
+    echo ""
+    skills_install "$@"
+  fi
 }
 
 cmd_sync() {
@@ -666,9 +704,11 @@ skills_list() {
 import json
 skills = json.load(open('$SKILLS_FILE'))
 for s in skills:
-    flags = s.get('flags', '')
-    flag_str = f' {flags}' if flags else ''
-    print(f'  \033[0;36m{s[\"repo\"]}\033[0m{flag_str}')
+    skill = s.get('skill', '')
+    desc = s.get('description', '')
+    label = f'{s[\"repo\"]}' + (f' / {skill}' if skill else '')
+    desc_str = f'  \033[0;90m{desc}\033[0m' if desc else ''
+    print(f'  \033[0;36m{label}\033[0m{desc_str}')
 "
 
   echo ""
@@ -782,21 +822,29 @@ for s in skills:
     print(s['repo'] + '|' + s.get('skill', '') + '|' + s.get('flags', '') + '|' + s.get('description', ''))
 ")
 
-  # Interactive selection or auto with -y
+  # Interactive selection, auto with -y, or fallback for non-TTY
   local -a chosen_indices=()
+  local tmp_result
+  tmp_result=$(mktemp)
+
   if has_yes_flag "$@"; then
     chosen_indices=("${skill_keys[@]}")
-  else
+  elif [[ -t 0 ]]; then
     echo ""
     local picker_args=()
     for i in $(seq 0 $((${#skill_keys[@]} - 1))); do
       picker_args+=("${skill_labels[$i]}" "${skill_keys[$i]}")
     done
 
+    multi_select "$tmp_result" "Select skills to install:" "${picker_args[@]}"
     while IFS= read -r line; do
       [[ -n "$line" ]] && chosen_indices+=("$line")
-    done < <(multi_select "Select skills to install:" "${picker_args[@]}")
+    done < "$tmp_result"
+    rm -f "$tmp_result"
     echo ""
+  else
+    # Non-interactive — select all
+    chosen_indices=("${skill_keys[@]}")
   fi
 
   if [[ ${#chosen_indices[@]} -eq 0 ]]; then
@@ -1061,6 +1109,7 @@ cmd_help() {
   echo ""
   echo -e "${BOLD}COMBINED${NC}"
   echo -e "  ${CYAN}setup${NC} [dir] [-y]         Full setup: memories + skills"
+  echo -e "  ${CYAN}update${NC}                   Update claude-prefs to latest version"
   echo ""
   echo -e "${BOLD}FLAGS${NC}"
   echo -e "  ${CYAN}-y, --yes${NC}                Skip interactive picker, select all"
@@ -1078,8 +1127,81 @@ cmd_help() {
 # Main
 # ---------------------------------------------------------------------------
 
+UPDATE_CHECK_FILE="$CLAUDE_DIR/.claude-prefs-last-update-check"
+
+check_for_updates() {
+  # Only check once per day
+  local now
+  now=$(date +%s)
+  local last_check=0
+  if [[ -f "$UPDATE_CHECK_FILE" ]]; then
+    last_check=$(cat "$UPDATE_CHECK_FILE" 2>/dev/null || echo 0)
+  fi
+  local diff=$((now - last_check))
+  if [[ $diff -lt 86400 ]]; then
+    return
+  fi
+  echo "$now" > "$UPDATE_CHECK_FILE"
+
+  # Check if repo exists and has a remote
+  if [[ ! -d "$SCRIPT_DIR/.git" ]]; then
+    return
+  fi
+
+  # Fetch silently and compare
+  git -C "$SCRIPT_DIR" fetch --quiet 2>/dev/null || return
+  local local_head remote_head
+  local_head=$(git -C "$SCRIPT_DIR" rev-parse HEAD 2>/dev/null) || return
+  remote_head=$(git -C "$SCRIPT_DIR" rev-parse '@{u}' 2>/dev/null) || return
+
+  if [[ "$local_head" != "$remote_head" ]]; then
+    echo -e "${YELLOW}Update available!${NC} Run ${CYAN}claude-prefs update${NC} to update."
+    echo ""
+  fi
+}
+
+cmd_update() {
+  if [[ ! -d "$SCRIPT_DIR/.git" ]]; then
+    echo -e "${RED}Not installed via git clone. Re-run the install script.${NC}"
+    return 1
+  fi
+
+  local old_head new_head
+  old_head=$(git -C "$SCRIPT_DIR" rev-parse --short HEAD 2>/dev/null)
+
+  echo -ne "  ⠋ Checking for updates..."
+  git -C "$SCRIPT_DIR" fetch --quiet 2>/dev/null
+
+  local local_head remote_head
+  local_head=$(git -C "$SCRIPT_DIR" rev-parse HEAD 2>/dev/null)
+  remote_head=$(git -C "$SCRIPT_DIR" rev-parse '@{u}' 2>/dev/null)
+
+  if [[ "$local_head" == "$remote_head" ]]; then
+    echo -e "\r\033[2K  ${GREEN}Already up to date${NC} ${DIM}($old_head)${NC}"
+    return
+  fi
+
+  echo -ne "\r\033[2K  ⠹ Pulling latest..."
+  git -C "$SCRIPT_DIR" pull --quiet 2>/dev/null
+  new_head=$(git -C "$SCRIPT_DIR" rev-parse --short HEAD 2>/dev/null)
+
+  local commit_count
+  commit_count=$(git -C "$SCRIPT_DIR" rev-list "$old_head".."$new_head" --count 2>/dev/null || echo "?")
+
+  echo -e "\r\033[2K  ${GREEN}Updated${NC} ${DIM}$old_head${NC} → ${DIM}$new_head${NC} ${DIM}($commit_count new commits)${NC}"
+
+  # Load any new defaults bundled with the update
+  defaults_load_quiet
+
+  # Update timestamp so we don't nag again
+  date +%s > "$UPDATE_CHECK_FILE"
+}
+
 command="${1:-help}"
 shift || true
+
+# Check for updates on every run (throttled to once/day)
+check_for_updates
 
 case "$command" in
   list)    cmd_list "$@" ;;
@@ -1092,6 +1214,7 @@ case "$command" in
   skills)   cmd_skills "$@" ;;
   defaults) cmd_defaults "$@" ;;
   setup)    cmd_setup "$@" ;;
+  update)   cmd_update ;;
   help|-h|--help) cmd_help ;;
   *)
     echo -e "${RED}Unknown command: $command${NC}"
