@@ -69,8 +69,7 @@ Run `claude-prefs help` for the full list.
 | `import [here\|all]` | Import memories from project(s) to global |
 | `skills list [here]` | List saved skills, or current project's |
 | `skills install [name]` | Download all saved, or search and add by name |
-| `skills add [-y]` | Add saved skills globally (picker) |
-| `skills add here [-y]` | Add saved skills to current project (picker) |
+| `skills add [-y]` | Add saved skills to current project (picker) |
 | `skills remove [name]` | Remove a skill from global list (picker) |
 | `skills remove here [name]` | Unlink skills from current project (picker) |
 | `defaults list` | Preview bundled default memories and skills |

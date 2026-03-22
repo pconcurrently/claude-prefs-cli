@@ -111,21 +111,13 @@ You can also use the full `owner/repo` format with `--skill`:
 claude-prefs skills install vercel-labs/agent-skills --skill web-design-guidelines
 ```
 
-### Add skills globally
+### Add skills to current project
 
 ```bash
 claude-prefs skills add
 ```
 
-Shows an interactive picker of saved skills. Selected skills are symlinked into `~/.claude/skills/` (available to all projects). Use `-y` to add all without prompting.
-
-### Add skills to current project
-
-```bash
-claude-prefs skills add here
-```
-
-Same picker, but symlinks into the current project's `.claude/skills/` instead. Per-project skills take priority over global ones.
+Shows an interactive picker of saved skills. Selected skills are symlinked into the current project's `.claude/skills/`. Use `-y` to add all without prompting.
 
 ### View saved skills
 
