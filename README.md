@@ -38,13 +38,13 @@ All commands work with both `claude-prefs` and `ccp`.
 ### First time (no memories or skills yet)
 
 ```bash
-# Load bundled default memories and skills into your global store
-ccp setup
+# Pick default memories to add to your global store
+ccp add
 
-# Pick additional skills to install from the saved list
+# Pick skills to install from the saved list
 ccp skills add
 
-# Start a project - interactive picker for which memories and skills to include
+# Start a project - picker for which memories and skills to include
 cd ~/my-project
 ccp init
 ```
@@ -70,14 +70,14 @@ Run `ccp help` for the full list.
 | --- | --- |
 | `list [here]` | List global memories, or current project's |
 | `status` | Show sync status across all projects |
-| `add <file>` | Add a memory file to the global store |
+| `add [name...]` | Pick default memories to add, or add by name |
 | `remove [here] <name>` | Remove a memory from global or current project |
 | `init [dir]` | Initialize a project with memories + skills (per-project) |
 | `sync [all\|here]` | Sync global memories to projects |
 | `import [here\|all]` | Import memories from project(s) to global |
 | `skills list [here]` | List saved skills, or current project's |
 | `skills install [name]` | Download all saved, or search and add by name |
-| `skills add [-y]` | Link saved skills to global + current project (picker) |
+| `skills add [name...] [-y]` | Add skills by name, or pick from saved list |
 | `skills remove [name]` | Remove a skill from global list (picker) |
 | `skills remove here [name]` | Unlink skills from current project (picker) |
 | `defaults list` | Preview bundled default memories and skills |
@@ -86,6 +86,30 @@ Run `ccp help` for the full list.
 | `update` | Update claude-prefs to the latest version |
 
 All interactive commands support `-y` / `--yes` to skip the picker and select everything.
+
+## Works with Claude Code automatically
+
+After install, `ccp` adds a reference to `~/.claude/CLAUDE.md` so Claude Code knows about it in every project. Claude Code can query your memories and skills, then add exactly what's needed - no picker required.
+
+**Example - Claude Code checks what's available and adds specific items:**
+
+```bash
+ccp defaults list
+ccp list
+ccp add feedback_no_em_dash feedback_use_pnpm
+ccp skills add conventional-commit api-design
+ccp init -y
+```
+
+**Example - Claude Code sets up a new project:**
+
+```bash
+ccp skills list
+ccp skills add typescript-advanced-types nodejs-backend-patterns
+ccp init -y
+```
+
+All commands have non-interactive forms that work without a TTY, so Claude Code can call them directly.
 
 ## How it works
 

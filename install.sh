@@ -92,7 +92,51 @@ else
   echo -e "  ${DIM}No ~/.claude/settings.json found - add permission manually if needed${NC}"
 fi
 
-# 5. Offer to load defaults
+# 5. Add ccp reference to global CLAUDE.md
+CLAUDE_MD="$HOME/.claude/CLAUDE.md"
+CCP_MARKER="<!-- ccp-reference -->"
+
+if [[ -f "$CLAUDE_MD" ]] && grep -q "$CCP_MARKER" "$CLAUDE_MD" 2>/dev/null; then
+  echo -e "  ${DIM}CLAUDE.md already has ccp reference${NC}"
+else
+  CCP_BLOCK="
+$CCP_MARKER
+## claude-prefs (ccp)
+
+\`ccp\` is a CLI tool for managing global Claude Code memories and skills. Run \`ccp help\` for all commands.
+
+### Query commands
+
+- \`ccp list\` - list all global memories
+- \`ccp list here\` - list current project's memories
+- \`ccp skills list\` - list all saved skills
+- \`ccp skills list here\` - list current project's skills
+- \`ccp defaults list\` - preview bundled default memories and skills
+
+### Non-interactive commands (use these to add specific items by name)
+
+- \`ccp add <name> [name2...]\` - add default memories by name (e.g. \`ccp add feedback_no_em_dash feedback_use_pnpm\`)
+- \`ccp skills add <name> [name2...]\` - add specific skills by name (e.g. \`ccp skills add conventional-commit api-design\`)
+- \`ccp skills install <name>\` - search and download a skill from skills.sh
+- \`ccp init -y\` - initialize current project with all global memories and skills
+- \`ccp import all\` - import memories from all projects into global store
+
+### Interactive commands (picker UI, for human use)
+
+- \`ccp add\` - pick default memories to add
+- \`ccp skills add\` - pick skills to install
+- \`ccp init\` - pick memories and skills for current project
+<!-- /ccp-reference -->"
+
+  if [[ -f "$CLAUDE_MD" ]]; then
+    echo "$CCP_BLOCK" >> "$CLAUDE_MD"
+  else
+    echo "$CCP_BLOCK" > "$CLAUDE_MD"
+  fi
+  echo -e "  ${GREEN}Added ccp reference to ~/.claude/CLAUDE.md${NC}"
+fi
+
+# 6. Offer to load defaults
 echo ""
 read -rp "Load default memories and skills? [Y/n] " answer
 answer="${answer:-y}"
