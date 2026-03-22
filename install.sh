@@ -20,16 +20,11 @@ echo ""
 
 # Check if Claude Code is installed
 if ! command -v claude &>/dev/null && [[ ! -d "$HOME/.claude" ]]; then
-  echo -e "  ${YELLOW}Warning:${NC} Claude Code does not appear to be installed."
-  echo -e "  ${DIM}Install it first: https://docs.anthropic.com/en/docs/claude-code${NC}"
+  echo -e "  Claude Code is required but not installed."
   echo ""
-  read -rp "Continue anyway? [y/N] " answer
-  answer="${answer:-n}"
-  if [[ ! "$answer" =~ ^[Yy] ]]; then
-    echo "Aborted."
-    exit 0
-  fi
-  echo ""
+  echo -e "  Install it with:  ${CYAN}npm install -g @anthropic-ai/claude-code${NC}"
+  echo -e "  ${DIM}More info: https://docs.anthropic.com/en/docs/claude-code${NC}"
+  exit 1
 fi
 
 # 1. Clone or update the repo (so defaults/ is available)
