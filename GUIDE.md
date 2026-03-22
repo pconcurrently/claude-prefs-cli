@@ -196,14 +196,14 @@ claude-prefs status
 
 Shows each project and how many memories are synced, outdated, or missing:
 
-```
+```text
 Project Sync Status
 
   Global memories: 5
 
-  -Users-po-project-a - 5 synced
-  -Users-po-project-b - 3 synced, 2 missing
-  -Users-po-project-c - no memory
+  project-a - 5 synced
+  project-b - 3 synced, 2 missing
+  project-c - no memory
 ```
 
 ## Memory file format
@@ -248,4 +248,4 @@ This pulls the latest changes and automatically loads any new bundled defaults (
 - **Curate aggressively.** Not every memory belongs in global. Project-specific patterns, architecture decisions, and domain knowledge should stay local.
 - **Use `sync all` after edits.** If you update a global memory file directly, run sync to push the change everywhere.
 - **Let Claude use it.** Add `Bash(claude-prefs *)` to your permissions so Claude can run `claude-prefs setup` when you start a new project.
-- **Works from subdirectories.** `init` and `setup` resolve the git root, so you don't need to be at the project root.
+- **Works from subdirectories.** `init` resolves the git root, so you don't need to be at the project root.
