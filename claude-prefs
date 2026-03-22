@@ -388,9 +388,9 @@ cmd_sync() {
 }
 
 cmd_add() {
-  local source="$1"
+  local source="${1:-}"
 
-  if [[ ! -f "$source" ]]; then
+  if [[ -z "$source" || ! -f "$source" ]]; then
     local project_mem
     project_mem=$(get_project_memory_dir)
     if [[ -f "$project_mem/$source" ]]; then
@@ -412,7 +412,7 @@ cmd_add() {
 }
 
 cmd_remove() {
-  local pattern="$1"
+  local pattern="${1:-}"
 
   if [[ -z "$pattern" ]]; then
     echo -e "${RED}Usage: claude-prefs remove <filename or pattern>${NC}"
@@ -767,8 +767,8 @@ for s in skills:
 }
 
 skills_add() {
-  local input="$1"
-  shift
+  local input="${1:-}"
+  shift 2>/dev/null || true
   local flags="$*"
 
   if [[ -z "$input" ]]; then
@@ -899,7 +899,7 @@ json.dump(skills, open('$SKILLS_FILE', 'w'), indent=2)
 }
 
 skills_remove() {
-  local input="$1"
+  local input="${1:-}"
 
   if [[ -z "$input" ]]; then
     echo -e "${RED}Usage: claude-prefs skills remove <name or pattern>${NC}"
