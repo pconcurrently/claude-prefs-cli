@@ -897,7 +897,7 @@ skills_list_here() {
   echo ""
 
   if [[ ! -d "$project_skills_dir" ]]; then
-    echo -e "  ${DIM}(none - use 'claude-prefs skills add' to add skills to this project)${NC}"
+    echo -e "  ${DIM}(none - use 'claude-prefs skills add here' to add skills to this project)${NC}"
     return
   fi
 
@@ -918,7 +918,7 @@ skills_list_here() {
   done
 
   if [[ $count -eq 0 ]]; then
-    echo -e "  ${DIM}(none - use 'claude-prefs skills add' to add skills to this project)${NC}"
+    echo -e "  ${DIM}(none - use 'claude-prefs skills add here' to add skills to this project)${NC}"
     return
   fi
 
@@ -1296,9 +1296,15 @@ skills_remove_here() {
 }
 
 skills_add() {
-  # Optional: pass --project-dir <dir> to install into project's .claude/skills/
   local project_dir=""
   local args=()
+
+  # Handle "skills add here"
+  if [[ "${1:-}" == "here" ]]; then
+    project_dir=$(get_git_root "$(pwd)")
+    shift
+  fi
+
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --project-dir)
@@ -1382,9 +1388,7 @@ for s in skills:
   if [[ -n "$project_dir" ]]; then
     target_skills_dir="$project_dir/.claude/skills"
   else
-    local git_root
-    git_root=$(get_git_root "$(pwd)")
-    target_skills_dir="$git_root/.claude/skills"
+    target_skills_dir="$CLAUDE_DIR/skills"
   fi
   mkdir -p "$target_skills_dir"
 
@@ -1702,7 +1706,8 @@ cmd_help() {
   echo -e "${BOLD}SKILLS${NC} (skills.sh)"
   echo -e "  ${CYAN}skills list${NC} [here]        List saved skills (or current project's)"
   echo -e "  ${CYAN}skills install${NC} [name]    Download all saved, or search and add by name"
-  echo -e "  ${CYAN}skills add${NC} [-y]          Add saved skills to current project (picker)"
+  echo -e "  ${CYAN}skills add${NC} [-y]          Add saved skills globally (picker)"
+  echo -e "  ${CYAN}skills add here${NC} [-y]    Add saved skills to current project (picker)"
   echo -e "  ${CYAN}skills remove${NC} [name]     Remove a skill from global list (picker)"
   echo -e "  ${CYAN}skills remove here${NC} [name] Unlink skills from current project (picker)"
   echo ""
