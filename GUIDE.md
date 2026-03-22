@@ -99,13 +99,19 @@ claude-prefs skills install
 
 ## Managing skills
 
-### Add a skill by name
+### Add a skill to the current project
 
 ```bash
 claude-prefs skills add conventional-commit
 ```
 
-This searches [skills.sh](https://skills.sh/) and picks the top result. You'll be asked if you want to install it immediately.
+This resolves the skill in order:
+
+1. Already downloaded in `~/.agents/skills/` - symlinks immediately
+2. Found in global skills list - uses that repo/skill pair
+3. Searches [skills.sh](https://skills.sh/) as a fallback
+
+The skill is added to the global list (if not already there), fetched if needed, and symlinked into the current project's `.claude/skills/`.
 
 You can also use the full `owner/repo` format with `--skill`:
 

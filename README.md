@@ -59,7 +59,7 @@ Run `claude-prefs help` for the full list.
 | `sync [all\|here]` | Sync global memories to projects |
 | `import [here\|all]` | Import memories from project(s) to global |
 | `skills list` | List saved skill repos |
-| `skills add <name or repo>` | Add a skill (searches skills.sh by name) |
+| `skills add <name or repo>` | Add a skill to global list and current project |
 | `skills remove <name or pattern>` | Remove a skill (supports fuzzy match) |
 | `skills install` | Install saved skills globally (interactive picker) |
 | `defaults list` | Preview bundled default memories and skills |
