@@ -78,11 +78,13 @@ Skip the pickers and install everything:
 claude-prefs setup -y
 ```
 
-### Memories only
+### Memories only (init)
 
 ```bash
-claude-prefs init ~/code4po/new-project
+claude-prefs init
 ```
+
+`init` resolves the git root automatically, so running it from `~/code4po/my-project/src/` will initialize `my-project`. It also offers to install saved skills after syncing memories.
 
 ### Skills only
 
@@ -222,9 +224,26 @@ Use pnpm as the default package manager.
 
 Types: `feedback`, `user`, `project`, `reference`. See the [Claude Code docs](https://docs.anthropic.com/en/docs/claude-code) for details on memory types.
 
+## Updating
+
+`claude-prefs` checks for updates once per day. When an update is available, you'll see:
+
+```text
+Update available! Run claude-prefs update to update.
+```
+
+Run the update:
+
+```bash
+claude-prefs update
+```
+
+This pulls the latest changes and automatically loads any new bundled defaults (memories and skills).
+
 ## Tips
 
 - **Import regularly.** Run `claude-prefs import all` periodically to pick up new memories from active projects.
 - **Curate aggressively.** Not every memory belongs in global. Project-specific patterns, architecture decisions, and domain knowledge should stay local.
 - **Use `sync all` after edits.** If you update a global memory file directly, run sync to push the change everywhere.
 - **Let Claude use it.** Add `Bash(claude-prefs *)` to your permissions so Claude can run `claude-prefs setup` when you start a new project.
+- **Works from subdirectories.** `init` and `setup` resolve the git root, so you don't need to be at the project root.

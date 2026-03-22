@@ -1130,34 +1130,39 @@ cmd_help() {
 UPDATE_CHECK_FILE="$CLAUDE_DIR/.claude-prefs-last-update-check"
 
 check_for_updates() {
-  # Only check once per day
-  local now
+  [[ ! -d "$SCRIPT_DIR/.git" ]] && return
+
+  local update_available_file="$CLAUDE_DIR/.claude-prefs-update-available"
+
+  # Show notification if a background check already found an update
+  if [[ -f "$update_available_file" ]]; then
+    echo -e "${YELLOW}Update available!${NC} Run ${CYAN}claude-prefs update${NC} to update."
+    echo ""
+  fi
+
+  # Only fetch once per day
+  local now last_check=0
   now=$(date +%s)
-  local last_check=0
   if [[ -f "$UPDATE_CHECK_FILE" ]]; then
     last_check=$(cat "$UPDATE_CHECK_FILE" 2>/dev/null || echo 0)
   fi
-  local diff=$((now - last_check))
-  if [[ $diff -lt 86400 ]]; then
+  if [[ $((now - last_check)) -lt 86400 ]]; then
     return
   fi
   echo "$now" > "$UPDATE_CHECK_FILE"
 
-  # Check if repo exists and has a remote
-  if [[ ! -d "$SCRIPT_DIR/.git" ]]; then
-    return
-  fi
-
-  # Fetch silently and compare
-  git -C "$SCRIPT_DIR" fetch --quiet 2>/dev/null || return
-  local local_head remote_head
-  local_head=$(git -C "$SCRIPT_DIR" rev-parse HEAD 2>/dev/null) || return
-  remote_head=$(git -C "$SCRIPT_DIR" rev-parse '@{u}' 2>/dev/null) || return
-
-  if [[ "$local_head" != "$remote_head" ]]; then
-    echo -e "${YELLOW}Update available!${NC} Run ${CYAN}claude-prefs update${NC} to update."
-    echo ""
-  fi
+  # Fetch in background so the command isn't delayed
+  (
+    git -C "$SCRIPT_DIR" fetch --quiet 2>/dev/null || exit 0
+    local_head=$(git -C "$SCRIPT_DIR" rev-parse HEAD 2>/dev/null) || exit 0
+    remote_head=$(git -C "$SCRIPT_DIR" rev-parse '@{u}' 2>/dev/null) || exit 0
+    if [[ "$local_head" != "$remote_head" ]]; then
+      touch "$update_available_file"
+    else
+      rm -f "$update_available_file"
+    fi
+  ) &
+  disown 2>/dev/null
 }
 
 cmd_update() {
@@ -1193,7 +1198,8 @@ cmd_update() {
   # Load any new defaults bundled with the update
   defaults_load_quiet
 
-  # Update timestamp so we don't nag again
+  # Clear update notification and refresh timestamp
+  rm -f "$CLAUDE_DIR/.claude-prefs-update-available"
   date +%s > "$UPDATE_CHECK_FILE"
 }
 

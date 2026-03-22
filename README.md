@@ -52,7 +52,7 @@ Run `claude-prefs help` for the full list.
 | `status` | Show sync status across all projects |
 | `add <file>` | Add a memory file to the global store |
 | `remove <file>` | Remove a memory from the global store |
-| `init [dir]` | Initialize a project with global memories |
+| `init [dir]` | Initialize a project with memories + skills |
 | `sync [all\|here]` | Sync global memories to projects |
 | `import [here\|all]` | Import memories from project(s) to global |
 | `skills list` | List saved skill repos |
@@ -62,6 +62,7 @@ Run `claude-prefs help` for the full list.
 | `defaults list` | Preview bundled default memories and skills |
 | `defaults load` | Load bundled defaults into global store |
 | `setup [dir]` | Full setup: defaults + memories + skills |
+| `update` | Update claude-prefs to the latest version |
 
 All interactive commands support `-y` / `--yes` to skip the picker and select everything.
 
@@ -90,11 +91,12 @@ All interactive commands support `-y` / `--yes` to skip the picker and select ev
 
 - **Global memories** live in `~/.claude/global-memory/`. These are your source of truth.
 - **Defaults** are bundled in the repo under `defaults/`. Run `defaults load` or `setup` to pull them into global.
-- `init` / `setup` copies selected memories into a project's memory directory and updates its `MEMORY.md` index.
+- `init` / `setup` copies selected memories and installs selected skills into the project. It resolves the git root automatically, so you can run it from any subdirectory.
 - `sync all` pushes updates to every project that already has a memory directory.
 - `import all` pulls non-project-specific memories from all projects into global (deduplicates automatically).
 - `list here` shows the current project's memories with sync status (synced, modified locally, local only).
 - **Skills** are managed via [skills.sh](https://skills.sh/) - `claude-prefs` saves your list and installs them with `npx skills add`.
+- **Updates** are checked automatically once per day. Run `claude-prefs update` to pull the latest version and load any new bundled defaults.
 
 ## License
 
