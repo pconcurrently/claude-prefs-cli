@@ -81,7 +81,7 @@ Select memories to install:
 
 `init` resolves the git root automatically, so running it from `~/code4po/my-project/src/` will initialize `my-project`.
 
-> **Per-project vs global skills:** `init` installs skills per-project (into `.claude/skills/`). `skills install` installs globally (into `~/.claude/skills/`). Per-project skills take priority over global ones.
+> **Per-project vs global skills:** `skills add` symlinks skills into the current project's `.claude/skills/`. Per-project skills take priority over global ones.
 
 ### Non-interactive init
 
@@ -91,47 +91,39 @@ Skip the pickers and install everything:
 claude-prefs init -y
 ```
 
-### Skills only (global)
-
-```bash
-claude-prefs skills install
-```
-
 ## Managing skills
 
-### Add a skill to the current project
+### Install a skill (search + download)
 
 ```bash
-claude-prefs skills add conventional-commit
+claude-prefs skills install conventional-commit
 ```
 
-This resolves the skill in order:
+This searches [skills.sh](https://skills.sh/), downloads the skill, and adds it to the global list. It resolves in order:
 
-1. Already downloaded in `~/.agents/skills/` - symlinks immediately
+1. Already downloaded in `~/.agents/skills/` - skips download
 2. Found in global skills list - uses that repo/skill pair
 3. Searches [skills.sh](https://skills.sh/) as a fallback
-
-The skill is added to the global list (if not already there), fetched if needed, and symlinked into the current project's `.claude/skills/`.
 
 You can also use the full `owner/repo` format with `--skill`:
 
 ```bash
-claude-prefs skills add vercel-labs/agent-skills --skill web-design-guidelines
+claude-prefs skills install vercel-labs/agent-skills --skill web-design-guidelines
 ```
+
+### Add skills to current project
+
+```bash
+claude-prefs skills add
+```
+
+Shows an interactive picker of saved skills. Selected skills are symlinked into the current project's `.claude/skills/`. Use `-y` to add all without prompting.
 
 ### View saved skills
 
 ```bash
 claude-prefs skills list
 ```
-
-### Install all saved skills
-
-```bash
-claude-prefs skills install
-```
-
-Shows an interactive picker. Use `-y` to install all without prompting.
 
 ### Remove a skill
 

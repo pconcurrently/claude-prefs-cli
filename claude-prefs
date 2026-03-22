@@ -334,7 +334,7 @@ cmd_init() {
   git_root=$(get_git_root "${1:-$(pwd)}")
   if [[ "$skill_count" != "0" ]]; then
     echo ""
-    skills_install --project-dir "$git_root" "$@"
+    skills_add --project-dir "$git_root" "$@"
   fi
 }
 
@@ -856,7 +856,7 @@ skills_list() {
   count=$(python3 -c "import json; print(len(json.load(open('$SKILLS_FILE'))))" 2>/dev/null || echo "0")
 
   if [[ "$count" == "0" ]]; then
-    echo -e "  ${DIM}(empty - use 'claude-prefs skills add <repo>' to add skills)${NC}"
+    echo -e "  ${DIM}(empty - use 'claude-prefs skills install <name>' to add skills)${NC}"
     return
   fi
 
@@ -875,16 +875,13 @@ for s in skills:
   echo -e "${DIM}$count skills saved${NC}"
 }
 
-skills_add() {
+skills_install() {
   local input="${1:-}"
   shift 2>/dev/null || true
   local flags="$*"
 
   if [[ -z "$input" ]]; then
-    echo -e "${RED}Usage: claude-prefs skills add <name or owner/repo> [--skill name]${NC}"
-    echo "  Example: claude-prefs skills add vercel-react-best-practices"
-    echo "  Example: claude-prefs skills add vercel-labs/agent-skills --skill web-design-guidelines"
-    echo "  Example: claude-prefs skills add vercel-labs/agent-skills --all"
+    echo -e "${RED}Usage: claude-prefs skills install <name or owner/repo> [--skill name]${NC}"
     exit 1
   fi
 
@@ -1095,7 +1092,7 @@ for label in removed:
   done
 }
 
-skills_install() {
+skills_add() {
   # Optional: pass --project-dir <dir> to install into project's .claude/skills/
   local project_dir=""
   local args=()
@@ -1117,7 +1114,7 @@ skills_install() {
   count=$(python3 -c "import json; print(len(json.load(open('$SKILLS_FILE'))))" 2>/dev/null || echo "0")
 
   if [[ "$count" == "0" ]]; then
-    echo -e "  ${DIM}No skills saved. Use 'claude-prefs skills add <repo>' first.${NC}"
+    echo -e "  ${DIM}No skills saved. Use 'claude-prefs skills install <name>' first.${NC}"
     return
   fi
 
@@ -1440,29 +1437,29 @@ cmd_help() {
   echo -e "${BOLD}USAGE${NC}"
   echo "  claude-prefs <command> [args]"
   echo ""
-  echo -e "${BOLD}MEMORY COMMANDS${NC}"
+  echo -e "${BOLD}GENERAL${NC}"
+  echo -e "  ${CYAN}init${NC} [dir] [-y]          Initialize project with memories + skills"
+  echo -e "  ${CYAN}setup${NC}                    Load bundled defaults into global store"
+  echo -e "  ${CYAN}update${NC}                   Update claude-prefs to latest version"
+  echo ""
+  echo -e "${BOLD}MEMORIES${NC}"
   echo -e "  ${CYAN}list${NC} [here]              List global memories (or current project's)"
   echo -e "  ${CYAN}status${NC}                   Show sync status across all projects"
   echo -e "  ${CYAN}add${NC} <file>               Add a memory file to global store"
-  echo -e "  ${CYAN}remove${NC} <name>             Remove a memory from global store"
+  echo -e "  ${CYAN}remove${NC} <name>            Remove a memory from global store"
   echo -e "  ${CYAN}remove here${NC} [name]       Remove memories from current project (picker)"
-  echo -e "  ${CYAN}init${NC} [dir] [-y]          Initialize project with memories + skills"
   echo -e "  ${CYAN}sync${NC} [all|here]          Sync global memories (default: all)"
   echo -e "  ${CYAN}import${NC} [here|all]        Import memories from project(s) to global"
   echo ""
-  echo -e "${BOLD}SKILLS COMMANDS${NC} (skills.sh)"
+  echo -e "${BOLD}SKILLS${NC} (skills.sh)"
   echo -e "  ${CYAN}skills list${NC}              List saved skills"
-  echo -e "  ${CYAN}skills add${NC} <name or repo> Add a skill (searches skills.sh by name)"
-  echo -e "  ${CYAN}skills remove${NC} <name or repo> Remove a skill from global list"
-  echo -e "  ${CYAN}skills install${NC} [-y]      Install saved skills (interactive picker)"
+  echo -e "  ${CYAN}skills install${NC} <name>    Search, download, and add to global list"
+  echo -e "  ${CYAN}skills add${NC} [-y]          Add saved skills to current project (picker)"
+  echo -e "  ${CYAN}skills remove${NC} <name>     Remove a skill from global list"
   echo ""
   echo -e "${BOLD}DEFAULTS${NC}"
   echo -e "  ${CYAN}defaults load${NC}            Load bundled default memories and skills"
   echo -e "  ${CYAN}defaults list${NC}            Preview bundled defaults"
-  echo ""
-  echo -e "${BOLD}COMBINED${NC}"
-  echo -e "  ${CYAN}setup${NC} [dir] [-y]         Full setup: memories + skills"
-  echo -e "  ${CYAN}update${NC}                   Update claude-prefs to latest version"
   echo ""
   echo -e "${BOLD}FLAGS${NC}"
   echo -e "  ${CYAN}-y, --yes${NC}                Skip interactive picker, select all"
