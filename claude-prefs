@@ -782,48 +782,80 @@ skills_add() {
   local repo=""
   local skill=""
 
+  local agents_dir="$HOME/.agents/skills"
+
   if [[ "$input" == *"/"* ]]; then
     # owner/repo format - parse --skill from flags
     repo="$input"
     if [[ "$flags" == *"--skill "* ]]; then
       skill=$(echo "$flags" | sed 's/.*--skill //' | awk '{print $1}')
     fi
-  else
-    # Skill name - look it up via npx skills find
-    echo -e "${DIM}Searching for '$input'...${NC}"
-    local find_result
-    find_result=$(npx --yes skills find "$input" 2>/dev/null | head -20)
-
-    # Parse top result: owner/repo@skill format (strip ANSI codes)
-    local top_match
-    top_match=$(echo "$find_result" | sed 's/\x1b\[[0-9;]*m//g' | grep -m1 '@' | awk '{print $1}')
-
-    if [[ -z "$top_match" ]]; then
-      echo -e "${RED}No skills found matching '$input'${NC}"
-      return 1
+  elif [[ -d "$agents_dir/$input" ]]; then
+    # Already downloaded locally - resolve repo/skill from global list or just use as-is
+    skill="$input"
+    local found_repo
+    found_repo=$(python3 -c "
+import json
+skills = json.load(open('$SKILLS_FILE'))
+for s in skills:
+    if s.get('skill', '') == '$input':
+        print(s['repo'])
+        break
+" 2>/dev/null)
+    if [[ -n "$found_repo" ]]; then
+      repo="$found_repo"
+    else
+      # Exists locally but not in global list - just symlink, skip global add
+      repo=""
     fi
+    echo -e "${GREEN}Found locally:${NC} $skill"
+  else
+    # Skill name - check global list first, then search skills.sh
+    local found_entry
+    found_entry=$(python3 -c "
+import json
+skills = json.load(open('$SKILLS_FILE'))
+for s in skills:
+    if '$input' in s.get('skill', '') or '$input' in s['repo']:
+        print(s['repo'] + '|' + s.get('skill', ''))
+        break
+" 2>/dev/null)
 
-    repo="${top_match%@*}"
-    skill="${top_match#*@}"
-    echo -e "${GREEN}Found:${NC} $repo --skill $skill"
+    if [[ -n "$found_entry" ]]; then
+      repo="${found_entry%|*}"
+      skill="${found_entry#*|}"
+      echo -e "${GREEN}Found in global list:${NC} $repo / $skill"
+    else
+      # Search skills.sh
+      echo -e "${DIM}Searching skills.sh for '$input'...${NC}"
+      local find_result
+      find_result=$(npx --yes skills find "$input" 2>/dev/null | head -20)
+
+      local top_match
+      top_match=$(echo "$find_result" | sed 's/\x1b\[[0-9;]*m//g' | grep -m1 '@' | awk '{print $1}')
+
+      if [[ -z "$top_match" ]]; then
+        echo -e "${RED}No skills found matching '$input'${NC}"
+        return 1
+      fi
+
+      repo="${top_match%@*}"
+      skill="${top_match#*@}"
+      echo -e "${GREEN}Found:${NC} $repo --skill $skill"
+    fi
   fi
 
-  # Check for duplicates on (repo, skill) pair
-  local exists
-  exists=$(python3 -c "
+  # Add to global list if not already there (skip if repo is empty - local only)
+  if [[ -n "$repo" ]]; then
+    local exists
+    exists=$(python3 -c "
 import json
 skills = json.load(open('$SKILLS_FILE'))
 print('yes' if any(s['repo'] == '$repo' and s.get('skill', '') == '$skill' for s in skills) else 'no')
 " 2>/dev/null || echo "no")
 
-  if [[ "$exists" == "yes" ]]; then
-    local display="$repo"
-    [[ -n "$skill" ]] && display="$display / $skill"
-    echo -e "${YELLOW}Already in skills list:${NC} $display"
-    return
-  fi
-
-  python3 -c "
+    if [[ "$exists" != "yes" ]]; then
+      python3 -c "
 import json
 entry = {'repo': '$repo'}
 if '$skill': entry['skill'] = '$skill'
@@ -832,14 +864,14 @@ skills = json.load(open('$SKILLS_FILE'))
 skills.append(entry)
 json.dump(skills, open('$SKILLS_FILE', 'w'), indent=2)
 "
-
-  local display="$repo"
-  [[ -n "$skill" ]] && display="$display / $skill"
-  echo -e "${GREEN}Added to skills list:${NC} $display"
+      local display="$repo"
+      [[ -n "$skill" ]] && display="$display / $skill"
+      echo -e "${GREEN}Added to skills list:${NC} $display"
+    fi
+  fi
 
   # Install and symlink to current project
   local skill_name="${skill:-$(basename "$repo")}"
-  local agents_dir="$HOME/.agents/skills"
   local git_root
   git_root=$(get_git_root "$(pwd)")
   local project_skills_dir="$git_root/.claude/skills"
