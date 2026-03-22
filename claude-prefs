@@ -1382,7 +1382,9 @@ for s in skills:
   if [[ -n "$project_dir" ]]; then
     target_skills_dir="$project_dir/.claude/skills"
   else
-    target_skills_dir="$CLAUDE_DIR/skills"
+    local git_root
+    git_root=$(get_git_root "$(pwd)")
+    target_skills_dir="$git_root/.claude/skills"
   fi
   mkdir -p "$target_skills_dir"
 
