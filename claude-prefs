@@ -1703,7 +1703,7 @@ cmd_help() {
   echo -e "${BOLD}SKILLS${NC} (skills.sh)"
   echo -e "  ${CYAN}skills list${NC} [here]        List saved skills (or current project's)"
   echo -e "  ${CYAN}skills install${NC} [name]    Download all saved, or search and add by name"
-  echo -e "  ${CYAN}skills add${NC} [-y]          Add saved skills to current project (picker)"
+  echo -e "  ${CYAN}skills add${NC} [-y]          Link saved skills to global + project (picker)"
   echo -e "  ${CYAN}skills remove${NC} [name]     Remove a skill from global list (picker)"
   echo -e "  ${CYAN}skills remove here${NC} [name] Unlink skills from current project (picker)"
   echo ""
