@@ -37,9 +37,12 @@ claude-prefs list here
 # Save some skill repos
 claude-prefs skills add vercel-labs/agent-skills --skill web-design-guidelines
 
-# Set up a new project (interactive picker for memories + skills)
-cd ~/my-new-project
+# Load defaults globally
 claude-prefs setup
+
+# Initialize a project (memories + skills)
+cd ~/my-new-project
+claude-prefs init
 ```
 
 ## Commands
@@ -61,7 +64,7 @@ Run `claude-prefs help` for the full list.
 | `skills install` | Install saved skills (interactive picker) |
 | `defaults list` | Preview bundled default memories and skills |
 | `defaults load` | Load bundled defaults into global store |
-| `setup [dir]` | Full setup: defaults + memories + skills |
+| `setup` | Load defaults into global store |
 | `update` | Update claude-prefs to the latest version |
 
 All interactive commands support `-y` / `--yes` to skip the picker and select everything.
@@ -91,7 +94,8 @@ All interactive commands support `-y` / `--yes` to skip the picker and select ev
 
 - **Global memories** live in `~/.claude/global-memory/`. These are your source of truth.
 - **Defaults** are bundled in the repo under `defaults/`. Run `defaults load` or `setup` to pull them into global.
-- `init` / `setup` copies selected memories and installs selected skills into the project. It resolves the git root automatically, so you can run it from any subdirectory.
+- `setup` loads bundled defaults into the global store. It offers to init the current project afterwards.
+- `init` copies selected memories and installs selected skills into the project. It resolves the git root automatically, so you can run it from any subdirectory. Already-downloaded skills are symlinked instantly; only new skills are fetched via `npx skills add`.
 - `sync all` pushes updates to every project that already has a memory directory.
 - `import all` pulls non-project-specific memories from all projects into global (deduplicates automatically).
 - `list here` shows the current project's memories with sync status (synced, modified locally, local only).

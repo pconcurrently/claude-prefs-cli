@@ -43,22 +43,30 @@ cd ~/code4po/my-project
 claude-prefs add feedback_testing.md
 ```
 
-## Setting up a new project
+## Global setup
 
-### Interactive setup (recommended)
+Load bundled defaults (memories and skills) into your global store:
 
 ```bash
-cd ~/code4po/new-project
 claude-prefs setup
 ```
 
-This runs three steps in sequence:
+This adds any new defaults that aren't already in your global store, then asks if you want to initialize the current project.
 
-**Step 1 - Defaults:** loads bundled default memories and skills into your global store (skips what's already there).
+## Setting up a new project
 
-**Step 2 - Memories:** navigate with arrow keys, space to toggle, `a` for all/none, enter to confirm.
+### Interactive init (recommended)
 
+```bash
+cd ~/code4po/new-project
+claude-prefs init
 ```
+
+This runs two steps:
+
+**Step 1 - Memories:** navigate with arrow keys, space to toggle, `a` for all/none, enter to confirm.
+
+```text
 Select memories to install:
   [space] toggle  [a] all/none  [enter] confirm
 
@@ -68,23 +76,17 @@ Select memories to install:
   [x] [feedback]   Always use pnpm
 ```
 
-**Step 3 - Skills:** same picker for your saved skills list.
+**Step 2 - Skills:** same picker for your saved skills list. Already-downloaded skills are symlinked instantly; only new skills are fetched via `npx skills add`.
 
-### Non-interactive setup
+`init` resolves the git root automatically, so running it from `~/code4po/my-project/src/` will initialize `my-project`.
+
+### Non-interactive init
 
 Skip the pickers and install everything:
 
 ```bash
-claude-prefs setup -y
+claude-prefs init -y
 ```
-
-### Memories only (init)
-
-```bash
-claude-prefs init
-```
-
-`init` resolves the git root automatically, so running it from `~/code4po/my-project/src/` will initialize `my-project`. It also offers to install saved skills after syncing memories.
 
 ### Skills only
 
@@ -166,7 +168,7 @@ Load them into your global store:
 claude-prefs defaults load
 ```
 
-This is also done automatically when you run `claude-prefs setup`. Defaults never overwrite existing entries - they only add what's missing.
+This is also done automatically when you run `claude-prefs setup` or `claude-prefs update`. Defaults never overwrite existing entries - they only add what's missing.
 
 ## Keeping projects in sync
 
