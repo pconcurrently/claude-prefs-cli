@@ -1245,20 +1245,8 @@ for s in skills:
     local flags="${skill_flags_arr[$idx]}"
     local skill_name="${skill:-$(basename "$repo")}"
 
-    # Already linked in target
-    if [[ -e "$target_skills_dir/$skill_name" ]]; then
-      echo -e "  ${DIM}-${NC} $skill_name ${DIM}(already linked)${NC}"
-      skipped=$((skipped + 1))
-      continue
-    fi
-
-    if [[ -d "$agents_dir/$skill_name" ]]; then
-      # Downloaded, just symlink
-      ln -sf "$agents_dir/$skill_name" "$target_skills_dir/$skill_name"
-      echo -e "  ${GREEN}+${NC} $skill_name"
-      added=$((added + 1))
-    else
-      # Fetch first, then symlink
+    if [[ ! -d "$agents_dir/$skill_name" ]]; then
+      # Not downloaded yet, fetch it
       echo -e "  ${CYAN}↓${NC} $skill_name ${DIM}(downloading)${NC}"
 
       local install_flags="-y -g"
@@ -1267,22 +1255,20 @@ for s in skills:
 
       npx skills add "$repo" $install_flags 2>&1 | sed 's/^/    /'
       fetched=$((fetched + 1))
+    fi
 
-      # Symlink into target if it landed in agents_dir
-      if [[ -d "$agents_dir/$skill_name" ]]; then
+    # Ensure symlink exists in target
+    if [[ -d "$agents_dir/$skill_name" ]]; then
+      if [[ ! -e "$target_skills_dir/$skill_name" ]]; then
         ln -sf "$agents_dir/$skill_name" "$target_skills_dir/$skill_name"
-        echo -e "  ${GREEN}+${NC} $skill_name"
       fi
+      echo -e "  ${GREEN}+${NC} $skill_name"
       added=$((added + 1))
     fi
   done
 
   echo ""
-  if [[ $added -gt 0 ]]; then
-    echo -e "${GREEN}Added $added skills${NC} ${DIM}to $target_skills_dir${NC}"
-  elif [[ $skipped -gt 0 ]]; then
-    echo -e "${DIM}All $skipped skills already linked${NC}"
-  fi
+  echo -e "${GREEN}Linked $added skills${NC} ${DIM}to $target_skills_dir${NC}"
 }
 
 # ---------------------------------------------------------------------------
