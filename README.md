@@ -111,6 +111,8 @@ ccp init -y
 
 All commands have non-interactive forms that work without a TTY, so Claude Code can call them directly.
 
+**How it works:** Running `ccp setup` or the installer writes a reference block to `~/.claude/CLAUDE.md` with all available commands. This is loaded into every Claude Code conversation automatically, so Claude Code knows how to use `ccp` without being told.
+
 ## How it works
 
 ```text
