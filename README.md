@@ -4,7 +4,7 @@ A CLI tool to manage global Claude Code memories and skills across all your proj
 
 **Problem:** Claude Code stores memories per-project. When you start a new project, your preferences (commit style, package manager, coding conventions) don't carry over. You have to re-teach Claude every time.
 
-**Solution:** `claude-prefs` (alias: `ccp`) maintains a central store of global memories and a saved skills list. Initialize any project in one command with an interactive picker to choose what to include.
+**Solution:** `claude-prefs` (alias: `ccp`) maintains a central store of global memories and a saved skills list. Initialize any project in one command with an interactive picker to choose what to include. It also works automatically with Claude Code - after install, Claude Code can query and manage your memories and skills by name without any manual steps.
 
 ## Prerequisites
 
