@@ -4,6 +4,10 @@
 
 set -euo pipefail
 
+REPO_URL="https://github.com/pconcurrently/claude-prefs-cli"
+
+trap 'echo -e "\n\033[0;90mIf this looks like a bug, try: claude-prefs update\033[0m"; echo -e "\033[0;90mOr report it at: ${REPO_URL}/issues\033[0m"' ERR
+
 CLAUDE_DIR="$HOME/.claude"
 GLOBAL_DIR="$CLAUDE_DIR/global-memory"
 PROJECTS_DIR="$CLAUDE_DIR/projects"
