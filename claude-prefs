@@ -1381,18 +1381,19 @@ for s in skills:
   fi
 
   local agents_dir="$HOME/.agents/skills"
-  local target_skills_dir
+  local global_skills_dir="$CLAUDE_DIR/skills"
+  local project_skills_dir
   if [[ -n "$project_dir" ]]; then
-    target_skills_dir="$project_dir/.claude/skills"
+    project_skills_dir="$project_dir/.claude/skills"
   else
-    target_skills_dir="$CLAUDE_DIR/skills"
+    project_skills_dir="$(get_git_root "$(pwd)")/.claude/skills"
   fi
-  mkdir -p "$target_skills_dir"
+  mkdir -p "$global_skills_dir" "$project_skills_dir"
 
   echo -e "${BOLD}Adding ${#chosen_indices[@]} skills...${NC}"
   echo ""
 
-  local added=0 fetched=0 skipped=0
+  local added=0 fetched=0
   for idx in "${chosen_indices[@]}"; do
     local repo="${skill_repos[$idx]}"
     local skill="${skill_skills[$idx]}"
@@ -1411,18 +1412,17 @@ for s in skills:
       fetched=$((fetched + 1))
     fi
 
-    # Ensure symlink exists in target
+    # Link to global and project
     if [[ -d "$agents_dir/$skill_name" ]]; then
-      if [[ ! -e "$target_skills_dir/$skill_name" ]]; then
-        ln -sf "$agents_dir/$skill_name" "$target_skills_dir/$skill_name"
-      fi
+      [[ ! -e "$global_skills_dir/$skill_name" ]] && ln -sf "$agents_dir/$skill_name" "$global_skills_dir/$skill_name"
+      [[ ! -e "$project_skills_dir/$skill_name" ]] && ln -sf "$agents_dir/$skill_name" "$project_skills_dir/$skill_name"
       echo -e "  ${GREEN}+${NC} $skill_name"
       added=$((added + 1))
     fi
   done
 
   echo ""
-  echo -e "${GREEN}Linked $added skills${NC} ${DIM}to $target_skills_dir${NC}"
+  echo -e "${GREEN}Linked $added skills${NC}"
 }
 
 # ---------------------------------------------------------------------------
