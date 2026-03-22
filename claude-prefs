@@ -1524,7 +1524,7 @@ cmd_update() {
   remote_head=$(git -C "$SCRIPT_DIR" rev-parse '@{u}' 2>/dev/null)
 
   if [[ "$local_head" == "$remote_head" ]]; then
-    echo -e "\r\033[2K  ${GREEN}Already up to date${NC} ${DIM}($old_head)${NC}"
+    echo -e "\r\033[2K  ${GREEN}✓${NC} Already on latest version ${DIM}($old_head)${NC}"
     return
   fi
 
