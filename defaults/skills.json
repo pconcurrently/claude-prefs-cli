@@ -88,5 +88,10 @@
     "repo": "github/awesome-copilot",
     "skill": "sql-code-review",
     "description": "SQL code review guidelines"
+  },
+  {
+    "repo": "github/awesome-copilot",
+    "skill": "conventional-commit",
+    "description": "Conventional commit message format and guidelines"
   }
 ]
