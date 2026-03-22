@@ -1235,28 +1235,31 @@ for s in skills:
   fi
   mkdir -p "$target_skills_dir"
 
-  echo -e "${BOLD}Installing ${#chosen_indices[@]} skills...${NC}"
+  echo -e "${BOLD}Adding ${#chosen_indices[@]} skills...${NC}"
   echo ""
 
-  local installed=0 linked=0 fetched=0
+  local added=0 fetched=0 skipped=0
   for idx in "${chosen_indices[@]}"; do
     local repo="${skill_repos[$idx]}"
     local skill="${skill_skills[$idx]}"
     local flags="${skill_flags_arr[$idx]}"
     local skill_name="${skill:-$(basename "$repo")}"
 
+    # Already linked in target
+    if [[ -e "$target_skills_dir/$skill_name" ]]; then
+      echo -e "  ${DIM}-${NC} $skill_name ${DIM}(already linked)${NC}"
+      skipped=$((skipped + 1))
+      continue
+    fi
+
     if [[ -d "$agents_dir/$skill_name" ]]; then
-      # Already downloaded, just ensure symlink exists in target
-      if [[ ! -e "$target_skills_dir/$skill_name" ]]; then
-        ln -sf "$agents_dir/$skill_name" "$target_skills_dir/$skill_name"
-        echo -e "  ${GREEN}+${NC} $skill_name ${DIM}(symlinked)${NC}"
-        linked=$((linked + 1))
-      else
-        echo -e "  ${DIM}-${NC} $skill_name ${DIM}(already installed)${NC}"
-      fi
+      # Downloaded, just symlink
+      ln -sf "$agents_dir/$skill_name" "$target_skills_dir/$skill_name"
+      echo -e "  ${GREEN}+${NC} $skill_name"
+      added=$((added + 1))
     else
-      # Need to fetch via npx skills, then symlink to target
-      echo -e "  ${CYAN}↓${NC} $skill_name ${DIM}(fetching)${NC}"
+      # Fetch first, then symlink
+      echo -e "  ${CYAN}↓${NC} $skill_name ${DIM}(downloading)${NC}"
 
       local install_flags="-y -g"
       [[ -n "$skill" ]] && install_flags="$install_flags --skill $skill"
@@ -1266,17 +1269,20 @@ for s in skills:
       fetched=$((fetched + 1))
 
       # Symlink into target if it landed in agents_dir
-      if [[ -d "$agents_dir/$skill_name" ]] && [[ ! -e "$target_skills_dir/$skill_name" ]]; then
+      if [[ -d "$agents_dir/$skill_name" ]]; then
         ln -sf "$agents_dir/$skill_name" "$target_skills_dir/$skill_name"
+        echo -e "  ${GREEN}+${NC} $skill_name"
       fi
+      added=$((added + 1))
     fi
-    installed=$((installed + 1))
   done
 
   echo ""
-  local target_label="globally"
-  [[ -n "$project_dir" ]] && target_label="to project"
-  echo -e "${GREEN}Done${NC} ${DIM}($installed skills installed $target_label: $fetched fetched, $linked symlinked, $((installed - fetched - linked)) already installed)${NC}"
+  if [[ $added -gt 0 ]]; then
+    echo -e "${GREEN}Added $added skills${NC} ${DIM}to $target_skills_dir${NC}"
+  elif [[ $skipped -gt 0 ]]; then
+    echo -e "${DIM}All $skipped skills already linked${NC}"
+  fi
 }
 
 # ---------------------------------------------------------------------------
