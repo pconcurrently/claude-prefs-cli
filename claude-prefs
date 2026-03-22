@@ -1058,6 +1058,11 @@ json.dump(skills, open('$SKILLS_FILE', 'w'), indent=2)
 skills_remove() {
   local input="${1:-}"
 
+  if [[ "$input" == "here" ]]; then
+    skills_remove_here "${2:-}"
+    return
+  fi
+
   # Build list of all skills (or filter by input)
   local -a skill_labels=()
   local -a skill_keys=()
@@ -1142,6 +1147,78 @@ for label in removed:
 
   echo ""
   echo -e "${GREEN}Removed ${#chosen[@]} skills${NC}"
+}
+
+skills_remove_here() {
+  local pattern="${1:-}"
+  local git_root
+  git_root=$(get_git_root "$(pwd)")
+  local project_skills_dir="$git_root/.claude/skills"
+  local project_name
+  project_name=$(basename "$git_root")
+
+  if [[ ! -d "$project_skills_dir" ]]; then
+    echo -e "${DIM}No skills linked in this project${NC}"
+    return
+  fi
+
+  # Collect linked skills
+  local -a skill_labels=()
+  local -a skill_keys=()
+
+  for entry in "$project_skills_dir"/*/; do
+    [[ ! -d "$entry" ]] && continue
+    local name
+    name=$(basename "$entry")
+
+    # Filter by pattern if given
+    if [[ -n "$pattern" ]] && [[ "$name" != *"$pattern"* ]]; then
+      continue
+    fi
+
+    skill_labels+=("$name")
+    skill_keys+=("$name")
+  done
+
+  if [[ ${#skill_keys[@]} -eq 0 ]]; then
+    if [[ -n "$pattern" ]]; then
+      echo -e "${RED}No skills matching '$pattern' in this project${NC}"
+    else
+      echo -e "${DIM}No skills linked in this project${NC}"
+    fi
+    return
+  fi
+
+  # Multi-select picker (default off)
+  local tmp_result
+  tmp_result=$(mktemp)
+
+  local picker_args=()
+  for i in $(seq 0 $((${#skill_keys[@]} - 1))); do
+    picker_args+=("${skill_labels[$i]}" "${skill_keys[$i]}")
+  done
+
+  multi_select "$tmp_result" "Select skills to unlink from $project_name:" --default-off "${picker_args[@]}"
+
+  local -a chosen=()
+  while IFS= read -r line; do
+    [[ -n "$line" ]] && chosen+=("$line")
+  done < "$tmp_result"
+  rm -f "$tmp_result"
+
+  if [[ ${#chosen[@]} -eq 0 ]]; then
+    echo -e "${DIM}No skills selected${NC}"
+    return
+  fi
+
+  echo ""
+  for name in "${chosen[@]}"; do
+    rm -rf "$project_skills_dir/$name"
+    echo -e "  ${GREEN}-${NC} $name"
+  done
+
+  echo ""
+  echo -e "${GREEN}Unlinked ${#chosen[@]} skills from project${NC}"
 }
 
 skills_add() {
@@ -1499,7 +1576,8 @@ cmd_help() {
   echo -e "  ${CYAN}skills list${NC} [here]        List saved skills (or current project's)"
   echo -e "  ${CYAN}skills install${NC} <name>    Search, download, and add to global list"
   echo -e "  ${CYAN}skills add${NC} [-y]          Add saved skills to current project (picker)"
-  echo -e "  ${CYAN}skills remove${NC} <name>     Remove a skill from global list"
+  echo -e "  ${CYAN}skills remove${NC} [name]     Remove a skill from global list (picker)"
+  echo -e "  ${CYAN}skills remove here${NC} [name] Unlink skills from current project (picker)"
   echo ""
   echo -e "${BOLD}DEFAULTS${NC}"
   echo -e "  ${CYAN}defaults load${NC}            Load bundled default memories and skills"
