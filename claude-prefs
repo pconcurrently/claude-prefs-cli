@@ -414,8 +414,16 @@ cmd_add() {
 cmd_remove() {
   local pattern="${1:-}"
 
+  # Handle "remove here" - remove from current project
+  if [[ "$pattern" == "here" ]]; then
+    cmd_remove_here "${2:-}"
+    return
+  fi
+
   if [[ -z "$pattern" ]]; then
-    echo -e "${RED}Usage: claude-prefs remove <filename or pattern>${NC}"
+    echo -e "${RED}Usage: claude-prefs remove <name or pattern>${NC}"
+    echo "  claude-prefs remove here          # remove from current project (picker)"
+    echo "  claude-prefs remove here <name>   # remove specific memory from project"
     exit 1
   fi
 
@@ -470,6 +478,101 @@ cmd_remove() {
       echo -e "${DIM}Cancelled${NC}"
     fi
   fi
+}
+
+cmd_remove_here() {
+  local pattern="${1:-}"
+  local mem_dir
+  mem_dir=$(get_project_memory_dir)
+
+  if [[ ! -d "$mem_dir" ]]; then
+    echo -e "${RED}No memory directory for this project${NC}"
+    exit 1
+  fi
+
+  # Collect project memories
+  local -a mem_labels=()
+  local -a mem_keys=()
+
+  for file in "$mem_dir"/*.md; do
+    [[ ! -f "$file" ]] && continue
+    local filename
+    filename=$(basename "$file")
+    [[ "$filename" == "MEMORY.md" ]] && continue
+
+    # If pattern given, filter by fuzzy match
+    if [[ -n "$pattern" ]] && [[ "$filename" != *"$pattern"* ]]; then
+      continue
+    fi
+
+    local type
+    type=$(get_memory_type "$file")
+    local description
+    description=$(get_memory_description "$file")
+
+    mem_labels+=("$(printf '%-12s %s' "[$type]" "$description")")
+    mem_keys+=("$filename")
+  done
+
+  if [[ ${#mem_keys[@]} -eq 0 ]]; then
+    if [[ -n "$pattern" ]]; then
+      echo -e "${RED}No memories matching '$pattern' in this project${NC}"
+    else
+      echo -e "${DIM}No memories in this project${NC}"
+    fi
+    return
+  fi
+
+  # If pattern matched exactly one, confirm and remove
+  if [[ -n "$pattern" && ${#mem_keys[@]} -eq 1 ]]; then
+    echo -e "  ${CYAN}${mem_keys[0]}${NC}  ${DIM}$(get_memory_description "$mem_dir/${mem_keys[0]}")${NC}"
+    read -rp "Remove from project? [Y/n] " answer
+    answer="${answer:-y}"
+    if [[ "$answer" =~ ^[Yy] ]]; then
+      rm "$mem_dir/${mem_keys[0]}"
+      remove_from_index "$mem_dir/MEMORY.md" "${mem_keys[0]}"
+      echo -e "${GREEN}Removed:${NC} ${mem_keys[0]}"
+    fi
+    return
+  fi
+
+  # Multi-select picker
+  local tmp_result
+  tmp_result=$(mktemp)
+
+  local picker_args=()
+  for i in $(seq 0 $((${#mem_keys[@]} - 1))); do
+    picker_args+=("${mem_labels[$i]}" "${mem_keys[$i]}")
+  done
+
+  # All deselected by default for removal
+  local -a defaults=()
+  for i in $(seq 0 $((${#mem_keys[@]} - 1))); do
+    defaults+=(0)
+  done
+
+  multi_select "$tmp_result" "Select memories to remove from project:" "${picker_args[@]}"
+
+  local -a chosen=()
+  while IFS= read -r line; do
+    [[ -n "$line" ]] && chosen+=("$line")
+  done < "$tmp_result"
+  rm -f "$tmp_result"
+
+  if [[ ${#chosen[@]} -eq 0 ]]; then
+    echo -e "${DIM}No memories selected${NC}"
+    return
+  fi
+
+  echo ""
+  for filename in "${chosen[@]}"; do
+    rm "$mem_dir/$filename"
+    remove_from_index "$mem_dir/MEMORY.md" "$filename"
+    echo -e "  ${GREEN}-${NC} $filename"
+  done
+
+  echo ""
+  echo -e "${GREEN}Removed ${#chosen[@]} memories from project${NC}"
 }
 
 cmd_list() {
@@ -1335,8 +1438,9 @@ cmd_help() {
   echo -e "  ${CYAN}list${NC} [here]              List global memories (or current project's)"
   echo -e "  ${CYAN}status${NC}                   Show sync status across all projects"
   echo -e "  ${CYAN}add${NC} <file>               Add a memory file to global store"
-  echo -e "  ${CYAN}remove${NC} <file>            Remove a memory from global store"
-  echo -e "  ${CYAN}init${NC} [dir] [-y]          Initialize project with global memories"
+  echo -e "  ${CYAN}remove${NC} <name>             Remove a memory from global store"
+  echo -e "  ${CYAN}remove here${NC} [name]       Remove memories from current project (picker)"
+  echo -e "  ${CYAN}init${NC} [dir] [-y]          Initialize project with memories + skills"
   echo -e "  ${CYAN}sync${NC} [all|here]          Sync global memories (default: all)"
   echo -e "  ${CYAN}import${NC} [here|all]        Import memories from project(s) to global"
   echo ""
@@ -1356,15 +1460,6 @@ cmd_help() {
   echo ""
   echo -e "${BOLD}FLAGS${NC}"
   echo -e "  ${CYAN}-y, --yes${NC}                Skip interactive picker, select all"
-  echo ""
-  echo -e "${BOLD}EXAMPLES${NC}"
-  echo "  claude-prefs import all                    # Import all projects' memories"
-  echo "  claude-prefs sync all                      # Push global memories to all projects"
-  echo "  claude-prefs init                          # Init current project (memories + skills)"
-  echo "  claude-prefs setup                         # Load defaults into global store"
-  echo "  claude-prefs skills add conventional-commit # Search and add a skill by name"
-  echo "  claude-prefs skills add vercel-labs/agent-skills --skill web-design-guidelines"
-  echo "  claude-prefs skills install                # Pick which skills to install"
 }
 
 # ---------------------------------------------------------------------------
