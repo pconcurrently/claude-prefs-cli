@@ -77,9 +77,11 @@ Select memories to install:
   [x] [feedback]   Always use pnpm
 ```
 
-**Step 2 - Skills:** same picker for your saved skills list. Already-downloaded skills are symlinked instantly; only new skills are fetched via `npx skills add`.
+**Step 2 - Skills:** same picker for your saved skills list. Selected skills are symlinked into `<project>/.claude/skills/`, so each project only gets the skills you chose. Already-downloaded skills are symlinked instantly; only new skills are fetched via `npx skills add`.
 
 `init` resolves the git root automatically, so running it from `~/code4po/my-project/src/` will initialize `my-project`.
+
+> **Per-project vs global skills:** `init` installs skills per-project (into `.claude/skills/`). `skills install` installs globally (into `~/.claude/skills/`). Per-project skills take priority over global ones.
 
 ### Non-interactive init
 
@@ -89,7 +91,7 @@ Skip the pickers and install everything:
 claude-prefs init -y
 ```
 
-### Skills only
+### Skills only (global)
 
 ```bash
 claude-prefs skills install

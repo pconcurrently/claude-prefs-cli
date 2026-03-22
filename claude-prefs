@@ -324,9 +324,11 @@ cmd_init() {
   # Install skills to local project
   local skill_count
   skill_count=$(python3 -c "import json; print(len(json.load(open('$SKILLS_FILE'))))" 2>/dev/null || echo "0")
+  local git_root
+  git_root=$(get_git_root "${1:-$(pwd)}")
   if [[ "$skill_count" != "0" ]]; then
     echo ""
-    skills_install "$@"
+    skills_install --project-dir "$git_root" "$@"
   fi
 }
 
@@ -936,6 +938,23 @@ for label in removed:
 }
 
 skills_install() {
+  # Optional: pass --project-dir <dir> to install into project's .claude/skills/
+  local project_dir=""
+  local args=()
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --project-dir)
+        project_dir="$2"
+        shift 2
+        ;;
+      *)
+        args+=("$1")
+        shift
+        ;;
+    esac
+  done
+  set -- "${args[@]}"
+
   local count
   count=$(python3 -c "import json; print(len(json.load(open('$SKILLS_FILE'))))" 2>/dev/null || echo "0")
 
@@ -1001,8 +1020,13 @@ for s in skills:
   fi
 
   local agents_dir="$HOME/.agents/skills"
-  local claude_skills_dir="$CLAUDE_DIR/skills"
-  mkdir -p "$claude_skills_dir"
+  local target_skills_dir
+  if [[ -n "$project_dir" ]]; then
+    target_skills_dir="$project_dir/.claude/skills"
+  else
+    target_skills_dir="$CLAUDE_DIR/skills"
+  fi
+  mkdir -p "$target_skills_dir"
 
   echo -e "${BOLD}Installing ${#chosen_indices[@]} skills...${NC}"
   echo ""
@@ -1015,18 +1039,16 @@ for s in skills:
     local skill_name="${skill:-$(basename "$repo")}"
 
     if [[ -d "$agents_dir/$skill_name" ]]; then
-      # Already downloaded, just ensure symlink exists
-      if [[ ! -e "$claude_skills_dir/$skill_name" ]]; then
-        ln -sf "$agents_dir/$skill_name" "$claude_skills_dir/$skill_name"
+      # Already downloaded, just ensure symlink exists in target
+      if [[ ! -e "$target_skills_dir/$skill_name" ]]; then
+        ln -sf "$agents_dir/$skill_name" "$target_skills_dir/$skill_name"
         echo -e "  ${GREEN}+${NC} $skill_name ${DIM}(symlinked)${NC}"
         linked=$((linked + 1))
       else
         echo -e "  ${DIM}-${NC} $skill_name ${DIM}(already installed)${NC}"
       fi
     else
-      # Need to fetch via npx skills
-      local display="$repo"
-      [[ -n "$skill" ]] && display="$display --skill $skill"
+      # Need to fetch via npx skills, then symlink to target
       echo -e "  ${CYAN}↓${NC} $skill_name ${DIM}(fetching)${NC}"
 
       local install_flags="-y -g"
@@ -1035,12 +1057,19 @@ for s in skills:
 
       npx skills add "$repo" $install_flags 2>&1 | sed 's/^/    /'
       fetched=$((fetched + 1))
+
+      # Symlink into target if it landed in agents_dir
+      if [[ -d "$agents_dir/$skill_name" ]] && [[ ! -e "$target_skills_dir/$skill_name" ]]; then
+        ln -sf "$agents_dir/$skill_name" "$target_skills_dir/$skill_name"
+      fi
     fi
     installed=$((installed + 1))
   done
 
   echo ""
-  echo -e "${GREEN}Done${NC} ${DIM}($installed skills: $fetched fetched, $linked linked, $((installed - fetched - linked)) already installed)${NC}"
+  local target_label="globally"
+  [[ -n "$project_dir" ]] && target_label="to project"
+  echo -e "${GREEN}Done${NC} ${DIM}($installed skills installed $target_label: $fetched fetched, $linked symlinked, $((installed - fetched - linked)) already installed)${NC}"
 }
 
 # ---------------------------------------------------------------------------
