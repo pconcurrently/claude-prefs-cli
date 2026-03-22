@@ -852,27 +852,47 @@ for s in skills:
     return
   fi
 
+  local agents_dir="$HOME/.agents/skills"
+  local claude_skills_dir="$CLAUDE_DIR/skills"
+  mkdir -p "$claude_skills_dir"
+
   echo -e "${BOLD}Installing ${#chosen_indices[@]} skills...${NC}"
   echo ""
 
+  local installed=0 linked=0 fetched=0
   for idx in "${chosen_indices[@]}"; do
     local repo="${skill_repos[$idx]}"
     local skill="${skill_skills[$idx]}"
     local flags="${skill_flags_arr[$idx]}"
+    local skill_name="${skill:-$(basename "$repo")}"
 
-    local display="$repo"
-    [[ -n "$skill" ]] && display="$display --skill $skill"
-    echo -e "  ${CYAN}Installing:${NC} $display"
+    if [[ -d "$agents_dir/$skill_name" ]]; then
+      # Already downloaded, just ensure symlink exists
+      if [[ ! -e "$claude_skills_dir/$skill_name" ]]; then
+        ln -sf "$agents_dir/$skill_name" "$claude_skills_dir/$skill_name"
+        echo -e "  ${GREEN}+${NC} $skill_name ${DIM}(symlinked)${NC}"
+        linked=$((linked + 1))
+      else
+        echo -e "  ${DIM}-${NC} $skill_name ${DIM}(already installed)${NC}"
+      fi
+    else
+      # Need to fetch via npx skills
+      local display="$repo"
+      [[ -n "$skill" ]] && display="$display --skill $skill"
+      echo -e "  ${CYAN}↓${NC} $skill_name ${DIM}(fetching)${NC}"
 
-    local install_flags="-y -g"
-    [[ -n "$skill" ]] && install_flags="$install_flags --skill $skill"
-    [[ -n "$flags" ]] && install_flags="$install_flags $flags"
+      local install_flags="-y -g"
+      [[ -n "$skill" ]] && install_flags="$install_flags --skill $skill"
+      [[ -n "$flags" ]] && install_flags="$install_flags $flags"
 
-    npx skills add "$repo" $install_flags 2>&1 | sed 's/^/    /'
-    echo ""
+      npx skills add "$repo" $install_flags 2>&1 | sed 's/^/    /'
+      fetched=$((fetched + 1))
+    fi
+    installed=$((installed + 1))
   done
 
-  echo -e "${GREEN}Done${NC}"
+  echo ""
+  echo -e "${GREEN}Done${NC} ${DIM}($installed skills: $fetched fetched, $linked linked, $((installed - fetched - linked)) already installed)${NC}"
 }
 
 # ---------------------------------------------------------------------------
