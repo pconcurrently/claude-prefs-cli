@@ -1,0 +1,1101 @@
+#!/usr/bin/env bash
+# claude-prefs - Manage global Claude Code memories, skills, and sync them to projects
+# Usage: claude-prefs <command> [args]
+
+set -euo pipefail
+
+CLAUDE_DIR="$HOME/.claude"
+GLOBAL_DIR="$CLAUDE_DIR/global-memory"
+PROJECTS_DIR="$CLAUDE_DIR/projects"
+SKILLS_FILE="$CLAUDE_DIR/global-skills.json"
+
+# Resolve defaults directory relative to the script location
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0" 2>/dev/null || realpath "$0" 2>/dev/null || echo "$0")")" && pwd)"
+DEFAULTS_DIR="$SCRIPT_DIR/defaults"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+CYAN='\033[0;36m'
+DIM='\033[0;90m'
+BOLD='\033[1m'
+NC='\033[0m'
+REVERSE='\033[7m'
+
+# Ensure global memory directory exists
+mkdir -p "$GLOBAL_DIR"
+
+# Ensure skills file exists
+if [[ ! -f "$SKILLS_FILE" ]]; then
+  echo '[]' > "$SKILLS_FILE"
+fi
+
+# ---------------------------------------------------------------------------
+# Interactive multi-select picker
+# Uses arrow keys to navigate, space to toggle, enter to confirm, a to toggle all
+# Arguments: prompt, then pairs of (label, key) passed as positional args
+# Selected keys are written to stdout, one per line
+# ---------------------------------------------------------------------------
+
+multi_select() {
+  local prompt="$1"
+  shift
+
+  local -a labels=()
+  local -a keys=()
+  local -a selected=()
+
+  # Parse label|key pairs
+  while [[ $# -gt 0 ]]; do
+    labels+=("$1")
+    keys+=("$2")
+    selected+=(1)  # all selected by default
+    shift 2
+  done
+
+  local total=${#labels[@]}
+  if [[ $total -eq 0 ]]; then
+    return
+  fi
+
+  local cursor=0
+
+  # Save terminal state and hide cursor
+  tput civis 2>/dev/null || true
+  local start_row
+  start_row=$(tput lines 2>/dev/null || echo 24)
+
+  draw_menu() {
+    # Move to start position and clear
+    echo -ne "\033[${total}A" 2>/dev/null || true
+    echo -ne "\r"
+
+    for i in $(seq 0 $((total - 1))); do
+      local check=" "
+      [[ ${selected[$i]} -eq 1 ]] && check="${GREEN}x${NC}"
+
+      local line="  [$check] ${labels[$i]}"
+      if [[ $i -eq $cursor ]]; then
+        line="  ${REVERSE}[$check] ${labels[$i]}${NC}"
+      fi
+
+      echo -e "\033[2K${line}"
+    done
+  }
+
+  # Print prompt and initial menu
+  echo -e "${BOLD}${prompt}${NC}"
+  echo -e "${DIM}  [space] toggle  [a] all/none  [enter] confirm${NC}"
+  echo ""
+
+  # Print placeholder lines
+  for i in $(seq 0 $((total - 1))); do
+    echo ""
+  done
+
+  draw_menu
+
+  # Read input
+  while true; do
+    # Read a single keypress
+    IFS= read -rsn1 key
+
+    case "$key" in
+      # Arrow keys: escape sequence
+      $'\x1b')
+        read -rsn2 rest
+        case "$rest" in
+          '[A') # Up
+            cursor=$(( (cursor - 1 + total) % total ))
+            ;;
+          '[B') # Down
+            cursor=$(( (cursor + 1) % total ))
+            ;;
+        esac
+        ;;
+      ' ') # Space - toggle current
+        if [[ ${selected[$cursor]} -eq 1 ]]; then
+          selected[$cursor]=0
+        else
+          selected[$cursor]=1
+        fi
+        ;;
+      'a'|'A') # Toggle all
+        local all_on=1
+        for i in $(seq 0 $((total - 1))); do
+          [[ ${selected[$i]} -eq 0 ]] && all_on=0
+        done
+        local new_val=1
+        [[ $all_on -eq 1 ]] && new_val=0
+        for i in $(seq 0 $((total - 1))); do
+          selected[$i]=$new_val
+        done
+        ;;
+      '') # Enter - confirm
+        break
+        ;;
+    esac
+
+    draw_menu
+  done
+
+  # Restore cursor
+  tput cnorm 2>/dev/null || true
+
+  # Output selected keys
+  for i in $(seq 0 $((total - 1))); do
+    if [[ ${selected[$i]} -eq 1 ]]; then
+      echo "${keys[$i]}"
+    fi
+  done
+}
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+get_project_id() {
+  local dir="${1:-$(pwd)}"
+  echo "$dir" | sed 's|/|-|g'
+}
+
+get_project_memory_dir() {
+  local project_id
+  project_id=$(get_project_id "${1:-$(pwd)}")
+  echo "$PROJECTS_DIR/$project_id/memory"
+}
+
+ensure_memory_index() {
+  local mem_dir="$1"
+  local index="$mem_dir/MEMORY.md"
+  if [[ ! -f "$index" ]]; then
+    echo "# Memory Index" > "$index"
+    echo "" >> "$index"
+  fi
+}
+
+get_memory_description() {
+  local file="$1"
+  grep -m1 '^description:' "$file" 2>/dev/null | sed 's/^description: *//' || echo "(no description)"
+}
+
+get_memory_type() {
+  local file="$1"
+  grep -m1 '^type:' "$file" 2>/dev/null | sed 's/^type: *//' || echo "unknown"
+}
+
+is_in_index() {
+  local index="$1"
+  local filename="$2"
+  grep -q "\[$filename\]" "$index" 2>/dev/null
+}
+
+add_to_index() {
+  local index="$1"
+  local filename="$2"
+  local description="$3"
+  if ! is_in_index "$index" "$filename"; then
+    echo "- [$filename]($filename) - $description" >> "$index"
+  fi
+}
+
+remove_from_index() {
+  local index="$1"
+  local filename="$2"
+  if [[ -f "$index" ]]; then
+    local tmp
+    tmp=$(mktemp)
+    grep -v "\[$filename\]" "$index" > "$tmp" || true
+    mv "$tmp" "$index"
+  fi
+}
+
+# Check for -y/--yes flag in remaining args
+has_yes_flag() {
+  for arg in "$@"; do
+    [[ "$arg" == "-y" || "$arg" == "--yes" ]] && return 0
+  done
+  return 1
+}
+
+# ---------------------------------------------------------------------------
+# Memory commands
+# ---------------------------------------------------------------------------
+
+cmd_init() {
+  local target_dir
+  target_dir=$(get_project_memory_dir "${1:-$(pwd)}")
+  local project_id
+  project_id=$(get_project_id "${1:-$(pwd)}")
+
+  echo -e "${CYAN}Initializing project:${NC} $project_id"
+
+  mkdir -p "$target_dir"
+  ensure_memory_index "$target_dir"
+
+  # Collect available memories
+  local -a mem_labels=()
+  local -a mem_keys=()
+
+  for file in "$GLOBAL_DIR"/*.md; do
+    [[ ! -f "$file" ]] && continue
+    local filename
+    filename=$(basename "$file")
+    [[ "$filename" == "MEMORY.md" ]] && continue
+
+    local type
+    type=$(get_memory_type "$file")
+    local description
+    description=$(get_memory_description "$file")
+
+    mem_labels+=("$(printf '%-12s %s' "[$type]" "$description")")
+    mem_keys+=("$filename")
+  done
+
+  if [[ ${#mem_keys[@]} -eq 0 ]]; then
+    echo -e "${DIM}No global memories to sync${NC}"
+    return
+  fi
+
+  # Interactive selection or auto with -y
+  local -a chosen_files=()
+  if has_yes_flag "$@"; then
+    chosen_files=("${mem_keys[@]}")
+  else
+    echo ""
+    local picker_args=()
+    for i in $(seq 0 $((${#mem_keys[@]} - 1))); do
+      picker_args+=("${mem_labels[$i]}" "${mem_keys[$i]}")
+    done
+
+    while IFS= read -r line; do
+      [[ -n "$line" ]] && chosen_files+=("$line")
+    done < <(multi_select "Select memories to install:" "${picker_args[@]}")
+    echo ""
+  fi
+
+  local count=0
+  for filename in "${chosen_files[@]}"; do
+    local file="$GLOBAL_DIR/$filename"
+    local description
+    description=$(get_memory_description "$file")
+
+    cp "$file" "$target_dir/$filename"
+    add_to_index "$target_dir/MEMORY.md" "$filename" "$description"
+    echo -e "  ${GREEN}+${NC} $filename"
+    count=$((count + 1))
+  done
+
+  echo ""
+  echo -e "${GREEN}Synced $count memories to project${NC}"
+  echo -e "${DIM}Location: $target_dir${NC}"
+}
+
+cmd_sync() {
+  local mode="${1:-all}"
+
+  case "$mode" in
+    all)
+      echo -e "${CYAN}Syncing global memories to all projects...${NC}"
+      echo ""
+      for project_dir in "$PROJECTS_DIR"/*/; do
+        [[ ! -d "$project_dir" ]] && continue
+        local project_id
+        project_id=$(basename "$project_dir")
+        local mem_dir="$project_dir/memory"
+
+        if [[ ! -d "$mem_dir" ]]; then
+          echo -e "  ${DIM}$project_id - no memory dir, skipping${NC}"
+          continue
+        fi
+
+        local count=0
+        for file in "$GLOBAL_DIR"/*.md; do
+          [[ ! -f "$file" ]] && continue
+          local filename
+          filename=$(basename "$file")
+          [[ "$filename" == "MEMORY.md" ]] && continue
+
+          local description
+          description=$(get_memory_description "$file")
+
+          if [[ -f "$mem_dir/$filename" ]] && diff -q "$file" "$mem_dir/$filename" > /dev/null 2>&1; then
+            continue
+          fi
+
+          cp "$file" "$mem_dir/$filename"
+          add_to_index "$mem_dir/MEMORY.md" "$filename" "$description"
+          count=$((count + 1))
+        done
+
+        if [[ $count -gt 0 ]]; then
+          echo -e "  ${GREEN}$project_id - updated $count memories${NC}"
+        else
+          echo -e "  ${DIM}$project_id - up to date${NC}"
+        fi
+      done
+      ;;
+    here)
+      cmd_init "$(pwd)"
+      ;;
+    *)
+      echo -e "${RED}Unknown sync mode: $mode${NC}"
+      echo "Usage: claude-prefs sync [all|here]"
+      exit 1
+      ;;
+  esac
+}
+
+cmd_add() {
+  local source="$1"
+
+  if [[ ! -f "$source" ]]; then
+    local project_mem
+    project_mem=$(get_project_memory_dir)
+    if [[ -f "$project_mem/$source" ]]; then
+      source="$project_mem/$source"
+    else
+      echo -e "${RED}File not found: $source${NC}"
+      exit 1
+    fi
+  fi
+
+  local filename
+  filename=$(basename "$source")
+  local description
+  description=$(get_memory_description "$source")
+
+  cp "$source" "$GLOBAL_DIR/$filename"
+  echo -e "${GREEN}Added to global:${NC} $filename"
+  echo -e "${DIM}$description${NC}"
+}
+
+cmd_remove() {
+  local filename="$1"
+
+  if [[ -f "$GLOBAL_DIR/$filename" ]]; then
+    rm "$GLOBAL_DIR/$filename"
+    echo -e "${GREEN}Removed from global:${NC} $filename"
+  else
+    echo -e "${RED}Not found in global memories: $filename${NC}"
+    exit 1
+  fi
+}
+
+cmd_list() {
+  local scope="${1:-global}"
+
+  if [[ "$scope" == "here" ]]; then
+    cmd_list_project
+    return
+  fi
+
+  echo -e "${BOLD}Global Memories${NC}"
+  echo ""
+
+  local count=0
+  for file in "$GLOBAL_DIR"/*.md; do
+    [[ ! -f "$file" ]] && continue
+    local filename
+    filename=$(basename "$file")
+
+    local type
+    type=$(get_memory_type "$file")
+    local description
+    description=$(get_memory_description "$file")
+
+    local type_color="$DIM"
+    case "$type" in
+      feedback)  type_color="$YELLOW" ;;
+      user)      type_color="$CYAN" ;;
+      project)   type_color="$GREEN" ;;
+      reference) type_color="$RED" ;;
+    esac
+
+    echo -e "  ${type_color}[$type]${NC} $filename"
+    echo -e "    ${DIM}$description${NC}"
+    count=$((count + 1))
+  done
+
+  if [[ $count -eq 0 ]]; then
+    echo -e "  ${DIM}(empty - use 'claude-prefs add <file>' to add memories)${NC}"
+  else
+    echo ""
+    echo -e "${DIM}$count global memories${NC}"
+  fi
+}
+
+cmd_list_project() {
+  local mem_dir
+  mem_dir=$(get_project_memory_dir)
+  local project_id
+  project_id=$(get_project_id)
+
+  echo -e "${BOLD}Project Memories${NC} ${DIM}($project_id)${NC}"
+  echo ""
+
+  if [[ ! -d "$mem_dir" ]]; then
+    echo -e "  ${DIM}No memory directory for this project${NC}"
+    echo -e "  ${DIM}Run 'claude-prefs init' or 'claude-prefs setup' to create one${NC}"
+    return
+  fi
+
+  local count=0
+  for file in "$mem_dir"/*.md; do
+    [[ ! -f "$file" ]] && continue
+    local filename
+    filename=$(basename "$file")
+    [[ "$filename" == "MEMORY.md" ]] && continue
+
+    local type
+    type=$(get_memory_type "$file")
+    local description
+    description=$(get_memory_description "$file")
+
+    local type_color="$DIM"
+    case "$type" in
+      feedback)  type_color="$YELLOW" ;;
+      user)      type_color="$CYAN" ;;
+      project)   type_color="$GREEN" ;;
+      reference) type_color="$RED" ;;
+    esac
+
+    # Check if it matches global version
+    local sync_status=""
+    if [[ -f "$GLOBAL_DIR/$filename" ]]; then
+      if diff -q "$file" "$GLOBAL_DIR/$filename" > /dev/null 2>&1; then
+        sync_status=" ${DIM}(synced)${NC}"
+      else
+        sync_status=" ${YELLOW}(modified locally)${NC}"
+      fi
+    else
+      sync_status=" ${DIM}(local only)${NC}"
+    fi
+
+    echo -e "  ${type_color}[$type]${NC} $filename$sync_status"
+    echo -e "    ${DIM}$description${NC}"
+    count=$((count + 1))
+  done
+
+  if [[ $count -eq 0 ]]; then
+    echo -e "  ${DIM}(empty)${NC}"
+  else
+    echo ""
+    echo -e "${DIM}$count memories${NC}"
+  fi
+}
+
+cmd_status() {
+  echo -e "${BOLD}Project Sync Status${NC}"
+  echo ""
+
+  local global_count=0
+  for f in "$GLOBAL_DIR"/*.md; do
+    [[ -f "$f" ]] && global_count=$((global_count + 1))
+  done
+  echo -e "  Global memories: ${CYAN}$global_count${NC}"
+  echo ""
+
+  for project_dir in "$PROJECTS_DIR"/*/; do
+    [[ ! -d "$project_dir" ]] && continue
+    local project_id
+    project_id=$(basename "$project_dir")
+    local mem_dir="$project_dir/memory"
+
+    if [[ ! -d "$mem_dir" ]]; then
+      echo -e "  ${DIM}$project_id - no memory${NC}"
+      continue
+    fi
+
+    local synced=0
+    local outdated=0
+    local missing=0
+
+    for file in "$GLOBAL_DIR"/*.md; do
+      [[ ! -f "$file" ]] && continue
+      local filename
+      filename=$(basename "$file")
+
+      if [[ ! -f "$mem_dir/$filename" ]]; then
+        missing=$((missing + 1))
+      elif diff -q "$file" "$mem_dir/$filename" > /dev/null 2>&1; then
+        synced=$((synced + 1))
+      else
+        outdated=$((outdated + 1))
+      fi
+    done
+
+    local status_parts=()
+    [[ $synced -gt 0 ]] && status_parts+=("${GREEN}${synced} synced${NC}")
+    [[ $outdated -gt 0 ]] && status_parts+=("${YELLOW}${outdated} outdated${NC}")
+    [[ $missing -gt 0 ]] && status_parts+=("${RED}${missing} missing${NC}")
+
+    local status_str
+    status_str=$(IFS=', '; echo "${status_parts[*]}")
+    echo -e "  $project_id - $status_str"
+  done
+}
+
+cmd_import() {
+  local scope="${1:-here}"
+  shift || true
+
+  case "$scope" in
+    here)
+      import_from_project "$(pwd)"
+      ;;
+    all)
+      echo -e "${CYAN}Importing memories from all projects...${NC}"
+      echo ""
+      for project_dir in "$PROJECTS_DIR"/*/; do
+        [[ ! -d "$project_dir" ]] && continue
+        local project_id
+        project_id=$(basename "$project_dir")
+        local mem_dir="$project_dir/memory"
+
+        if [[ ! -d "$mem_dir" ]]; then
+          continue
+        fi
+
+        local has_memories=false
+        for f in "$mem_dir"/*.md; do
+          [[ ! -f "$f" ]] && continue
+          local fname
+          fname=$(basename "$f")
+          [[ "$fname" == "MEMORY.md" ]] && continue
+          has_memories=true
+          break
+        done
+
+        if ! $has_memories; then
+          continue
+        fi
+
+        echo -e "  ${CYAN}$project_id${NC}"
+        import_from_project_dir "$mem_dir" "    "
+      done
+      ;;
+    *)
+      echo -e "${RED}Unknown import scope: $scope${NC}"
+      echo "Usage: claude-prefs import [here|all]"
+      exit 1
+      ;;
+  esac
+}
+
+import_from_project() {
+  local project_dir="$1"
+  local mem_dir
+  mem_dir=$(get_project_memory_dir "$project_dir")
+
+  if [[ ! -d "$mem_dir" ]]; then
+    echo -e "${RED}No memory directory found for this project${NC}"
+    exit 1
+  fi
+
+  echo -e "${CYAN}Importing memories from project...${NC}"
+  import_from_project_dir "$mem_dir" "  "
+}
+
+import_from_project_dir() {
+  local mem_dir="$1"
+  local indent="${2:-  }"
+
+  local count=0
+  for file in "$mem_dir"/*.md; do
+    [[ ! -f "$file" ]] && continue
+    local filename
+    filename=$(basename "$file")
+    [[ "$filename" == "MEMORY.md" ]] && continue
+
+    local type
+    type=$(get_memory_type "$file")
+    if [[ "$type" == "project" ]]; then
+      echo -e "${indent}${DIM}$filename - project-specific, skipping${NC}"
+      continue
+    fi
+
+    if [[ -f "$GLOBAL_DIR/$filename" ]]; then
+      echo -e "${indent}${DIM}$filename - already exists, skipping${NC}"
+      continue
+    fi
+
+    cp "$file" "$GLOBAL_DIR/$filename"
+    echo -e "${indent}${GREEN}$filename${NC}"
+    count=$((count + 1))
+  done
+
+  echo -e "${indent}${GREEN}Imported $count memories${NC}"
+}
+
+# ---------------------------------------------------------------------------
+# Skills commands (skills.sh integration)
+# ---------------------------------------------------------------------------
+
+cmd_skills() {
+  local subcmd="${1:-list}"
+  shift || true
+
+  case "$subcmd" in
+    list)    skills_list ;;
+    add)     skills_add "$@" ;;
+    remove)  skills_remove "$@" ;;
+    install) skills_install "$@" ;;
+    *)
+      echo -e "${RED}Unknown skills command: $subcmd${NC}"
+      echo "Usage: claude-prefs skills [list|add|remove|install]"
+      exit 1
+      ;;
+  esac
+}
+
+skills_list() {
+  echo -e "${BOLD}Global Skills List${NC}"
+  echo ""
+
+  local count
+  count=$(python3 -c "import json; print(len(json.load(open('$SKILLS_FILE'))))" 2>/dev/null || echo "0")
+
+  if [[ "$count" == "0" ]]; then
+    echo -e "  ${DIM}(empty - use 'claude-prefs skills add <repo>' to add skills)${NC}"
+    return
+  fi
+
+  python3 -c "
+import json
+skills = json.load(open('$SKILLS_FILE'))
+for s in skills:
+    flags = s.get('flags', '')
+    flag_str = f' {flags}' if flags else ''
+    print(f'  \033[0;36m{s[\"repo\"]}\033[0m{flag_str}')
+"
+
+  echo ""
+  echo -e "${DIM}$count skills saved${NC}"
+}
+
+skills_add() {
+  local repo="$1"
+  local flags="${2:-}"
+
+  if [[ -z "$repo" ]]; then
+    echo -e "${RED}Usage: claude-prefs skills add <owner/repo> [flags]${NC}"
+    echo "  Example: claude-prefs skills add anthropics/claude-code-skills"
+    echo "  Example: claude-prefs skills add vercel-labs/agent-skills --all"
+    exit 1
+  fi
+
+  local exists
+  exists=$(python3 -c "
+import json
+skills = json.load(open('$SKILLS_FILE'))
+print('yes' if any(s['repo'] == '$repo' for s in skills) else 'no')
+" 2>/dev/null || echo "no")
+
+  if [[ "$exists" == "yes" ]]; then
+    echo -e "${YELLOW}Already in skills list:${NC} $repo"
+    return
+  fi
+
+  python3 -c "
+import json
+skills = json.load(open('$SKILLS_FILE'))
+skills.append({'repo': '$repo', 'flags': '$flags'})
+json.dump(skills, open('$SKILLS_FILE', 'w'), indent=2)
+"
+
+  echo -e "${GREEN}Added to skills list:${NC} $repo"
+  [[ -n "$flags" ]] && echo -e "${DIM}Flags: $flags${NC}"
+
+  echo ""
+  read -rp "Install now? [Y/n] " answer
+  answer="${answer:-y}"
+  if [[ "$answer" =~ ^[Yy] ]]; then
+    echo ""
+    npx skills add "$repo" -g $flags
+  fi
+}
+
+skills_remove() {
+  local repo="$1"
+
+  if [[ -z "$repo" ]]; then
+    echo -e "${RED}Usage: claude-prefs skills remove <owner/repo>${NC}"
+    exit 1
+  fi
+
+  local found
+  found=$(python3 -c "
+import json
+skills = json.load(open('$SKILLS_FILE'))
+print('yes' if any(s['repo'] == '$repo' for s in skills) else 'no')
+" 2>/dev/null || echo "no")
+
+  if [[ "$found" == "no" ]]; then
+    echo -e "${RED}Not in skills list:${NC} $repo"
+    exit 1
+  fi
+
+  python3 -c "
+import json
+skills = json.load(open('$SKILLS_FILE'))
+skills = [s for s in skills if s['repo'] != '$repo']
+json.dump(skills, open('$SKILLS_FILE', 'w'), indent=2)
+"
+
+  echo -e "${GREEN}Removed from skills list:${NC} $repo"
+}
+
+skills_install() {
+  local count
+  count=$(python3 -c "import json; print(len(json.load(open('$SKILLS_FILE'))))" 2>/dev/null || echo "0")
+
+  if [[ "$count" == "0" ]]; then
+    echo -e "  ${DIM}No skills saved. Use 'claude-prefs skills add <repo>' first.${NC}"
+    return
+  fi
+
+  # Build picker data from skills list
+  # Each entry has: label, key (index), repo, skill, flags
+  local -a skill_labels=()
+  local -a skill_keys=()
+  local -a skill_repos=()
+  local -a skill_skills=()
+  local -a skill_flags_arr=()
+
+  local idx=0
+  while IFS='|' read -r repo skill flags desc; do
+    local label="$repo"
+    [[ -n "$skill" ]] && label="$label --skill $skill"
+    [[ -n "$desc" ]] && label="$label  ${DIM}($desc)${NC}"
+    skill_labels+=("$label")
+    skill_keys+=("$idx")
+    skill_repos+=("$repo")
+    skill_skills+=("$skill")
+    skill_flags_arr+=("$flags")
+    idx=$((idx + 1))
+  done < <(python3 -c "
+import json
+skills = json.load(open('$SKILLS_FILE'))
+for s in skills:
+    print(s['repo'] + '|' + s.get('skill', '') + '|' + s.get('flags', '') + '|' + s.get('description', ''))
+")
+
+  # Interactive selection or auto with -y
+  local -a chosen_indices=()
+  if has_yes_flag "$@"; then
+    chosen_indices=("${skill_keys[@]}")
+  else
+    echo ""
+    local picker_args=()
+    for i in $(seq 0 $((${#skill_keys[@]} - 1))); do
+      picker_args+=("${skill_labels[$i]}" "${skill_keys[$i]}")
+    done
+
+    while IFS= read -r line; do
+      [[ -n "$line" ]] && chosen_indices+=("$line")
+    done < <(multi_select "Select skills to install:" "${picker_args[@]}")
+    echo ""
+  fi
+
+  if [[ ${#chosen_indices[@]} -eq 0 ]]; then
+    echo -e "${DIM}No skills selected${NC}"
+    return
+  fi
+
+  echo -e "${BOLD}Installing ${#chosen_indices[@]} skills...${NC}"
+  echo ""
+
+  for idx in "${chosen_indices[@]}"; do
+    local repo="${skill_repos[$idx]}"
+    local skill="${skill_skills[$idx]}"
+    local flags="${skill_flags_arr[$idx]}"
+
+    local display="$repo"
+    [[ -n "$skill" ]] && display="$display --skill $skill"
+    echo -e "  ${CYAN}Installing:${NC} $display"
+
+    local install_flags="-y -g"
+    [[ -n "$skill" ]] && install_flags="$install_flags --skill $skill"
+    [[ -n "$flags" ]] && install_flags="$install_flags $flags"
+
+    npx skills add "$repo" $install_flags 2>&1 | sed 's/^/    /'
+    echo ""
+  done
+
+  echo -e "${GREEN}Done${NC}"
+}
+
+# ---------------------------------------------------------------------------
+# Defaults command - load bundled memories and skills
+# ---------------------------------------------------------------------------
+
+cmd_defaults() {
+  local subcmd="${1:-load}"
+  shift || true
+
+  case "$subcmd" in
+    load) defaults_load "$@" ;;
+    list) defaults_list ;;
+    *)
+      echo -e "${RED}Unknown defaults command: $subcmd${NC}"
+      echo "Usage: claude-prefs defaults [load|list]"
+      exit 1
+      ;;
+  esac
+}
+
+defaults_list() {
+  if [[ ! -d "$DEFAULTS_DIR" ]]; then
+    echo -e "${RED}Defaults directory not found at $DEFAULTS_DIR${NC}"
+    echo -e "${DIM}This command requires the full repo clone, not a standalone install.${NC}"
+    exit 1
+  fi
+
+  echo -e "${BOLD}Bundled Defaults${NC}"
+
+  echo ""
+  echo -e "  ${BOLD}Memories:${NC}"
+  for file in "$DEFAULTS_DIR/memories"/*.md; do
+    [[ ! -f "$file" ]] && continue
+    local desc
+    desc=$(get_memory_description "$file")
+    echo -e "    ${CYAN}$(basename "$file")${NC}"
+    echo -e "      ${DIM}$desc${NC}"
+  done
+
+  echo ""
+  echo -e "  ${BOLD}Skills:${NC}"
+  python3 -c "
+import json
+skills = json.load(open('$DEFAULTS_DIR/skills.json'))
+for s in skills:
+    desc = s.get('description', '')
+    skill = s.get('skill', '')
+    repo = s['repo']
+    label = f'{repo} --skill {skill}' if skill else repo
+    print(f'    \033[0;36m{label}\033[0m')
+    if desc:
+        print(f'      \033[0;90m{desc}\033[0m')
+" 2>/dev/null
+}
+
+defaults_load() {
+  if [[ ! -d "$DEFAULTS_DIR" ]]; then
+    echo -e "${RED}Defaults directory not found at $DEFAULTS_DIR${NC}"
+    echo -e "${DIM}This command requires the full repo clone, not a standalone install.${NC}"
+    exit 1
+  fi
+
+  echo -e "${BOLD}Loading defaults...${NC}"
+  echo ""
+
+  # Load default memories
+  echo -e "  ${BOLD}Memories:${NC}"
+  local mem_count=0
+  for file in "$DEFAULTS_DIR/memories"/*.md; do
+    [[ ! -f "$file" ]] && continue
+    local filename
+    filename=$(basename "$file")
+
+    if [[ -f "$GLOBAL_DIR/$filename" ]]; then
+      echo -e "    ${DIM}$filename - already exists, skipping${NC}"
+      continue
+    fi
+
+    cp "$file" "$GLOBAL_DIR/$filename"
+    echo -e "    ${GREEN}+ $filename${NC}"
+    mem_count=$((mem_count + 1))
+  done
+  echo -e "    ${GREEN}Added $mem_count memories${NC}"
+
+  # Load default skills
+  echo ""
+  echo -e "  ${BOLD}Skills:${NC}"
+  local skill_count=0
+  python3 -c "
+import json
+
+defaults = json.load(open('$DEFAULTS_DIR/skills.json'))
+try:
+    existing = json.load(open('$SKILLS_FILE'))
+except:
+    existing = []
+
+# Build set of existing (repo, skill) pairs
+existing_set = set()
+for s in existing:
+    existing_set.add((s['repo'], s.get('skill', '')))
+
+added = 0
+for s in defaults:
+    key = (s['repo'], s.get('skill', ''))
+    if key not in existing_set:
+        existing.append(s)
+        existing_set.add(key)
+        skill = s.get('skill', '')
+        label = f'{s[\"repo\"]} --skill {skill}' if skill else s['repo']
+        print(f'    \033[0;32m+ {label}\033[0m')
+        added += 1
+    else:
+        skill = s.get('skill', '')
+        label = f'{s[\"repo\"]} --skill {skill}' if skill else s['repo']
+        print(f'    \033[0;90m{label} - already exists, skipping\033[0m')
+
+json.dump(existing, open('$SKILLS_FILE', 'w'), indent=2)
+print(f'    \033[0;32mAdded {added} skills\033[0m')
+" 2>/dev/null
+
+  echo ""
+  echo -e "${GREEN}Done!${NC} Run ${CYAN}claude-prefs skills install${NC} to install the skills."
+}
+
+# Silent version for setup - loads defaults without the "run skills install" message
+defaults_load_quiet() {
+  if [[ ! -d "$DEFAULTS_DIR" ]]; then
+    return
+  fi
+
+  local mem_count=0
+  for file in "$DEFAULTS_DIR/memories"/*.md; do
+    [[ ! -f "$file" ]] && continue
+    local filename
+    filename=$(basename "$file")
+    [[ -f "$GLOBAL_DIR/$filename" ]] && continue
+    cp "$file" "$GLOBAL_DIR/$filename"
+    echo -e "  ${GREEN}+ $filename${NC}"
+    mem_count=$((mem_count + 1))
+  done
+
+  python3 -c "
+import json
+defaults = json.load(open('$DEFAULTS_DIR/skills.json'))
+try:
+    existing = json.load(open('$SKILLS_FILE'))
+except:
+    existing = []
+existing_set = set((s['repo'], s.get('skill', '')) for s in existing)
+added = 0
+for s in defaults:
+    key = (s['repo'], s.get('skill', ''))
+    if key not in existing_set:
+        existing.append(s)
+        existing_set.add(key)
+        added += 1
+json.dump(existing, open('$SKILLS_FILE', 'w'), indent=2)
+if added > 0:
+    print(f'  \033[0;32m+ {added} default skills added to list\033[0m')
+else:
+    print(f'  \033[0;90mAll defaults already loaded\033[0m')
+" 2>/dev/null
+
+  if [[ $mem_count -gt 0 ]]; then
+    echo -e "  ${GREEN}+ $mem_count default memories added${NC}"
+  else
+    echo -e "  ${DIM}All defaults already loaded${NC}"
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# Setup command - full project setup (memories + skills)
+# ---------------------------------------------------------------------------
+
+cmd_setup() {
+  local target="${1:-$(pwd)}"
+
+  echo -e "${BOLD}Full Project Setup${NC}"
+  echo ""
+
+  # Step 0: Ensure defaults are loaded into global store
+  if [[ -d "$DEFAULTS_DIR" ]]; then
+    echo -e "${BOLD}[1/3] Loading defaults${NC}"
+    defaults_load_quiet
+    echo ""
+    echo -e "${BOLD}[2/3] Memories${NC}"
+  else
+    echo -e "${BOLD}[1/2] Memories${NC}"
+  fi
+
+  # Step 1: Sync memories (interactive picker)
+  cmd_init "$target"
+  echo ""
+
+  # Step 2: Install skills (interactive picker)
+  if [[ -d "$DEFAULTS_DIR" ]]; then
+    echo -e "${BOLD}[3/3] Skills${NC}"
+  else
+    echo -e "${BOLD}[2/2] Skills${NC}"
+  fi
+  skills_install
+}
+
+# ---------------------------------------------------------------------------
+# Help
+# ---------------------------------------------------------------------------
+
+cmd_help() {
+  echo -e "${BOLD}claude-prefs${NC} - Manage global Claude Code memories and skills"
+  echo ""
+  echo -e "${BOLD}USAGE${NC}"
+  echo "  claude-prefs <command> [args]"
+  echo ""
+  echo -e "${BOLD}MEMORY COMMANDS${NC}"
+  echo -e "  ${CYAN}list${NC} [here]              List global memories (or current project's)"
+  echo -e "  ${CYAN}status${NC}                   Show sync status across all projects"
+  echo -e "  ${CYAN}add${NC} <file>               Add a memory file to global store"
+  echo -e "  ${CYAN}remove${NC} <file>            Remove a memory from global store"
+  echo -e "  ${CYAN}init${NC} [dir] [-y]          Initialize project with global memories"
+  echo -e "  ${CYAN}sync${NC} [all|here]          Sync global memories (default: all)"
+  echo -e "  ${CYAN}import${NC} [here|all]        Import memories from project(s) to global"
+  echo ""
+  echo -e "${BOLD}SKILLS COMMANDS${NC} (skills.sh)"
+  echo -e "  ${CYAN}skills list${NC}              List saved skills"
+  echo -e "  ${CYAN}skills add${NC} <repo> [flags] Add a skill repo to global list"
+  echo -e "  ${CYAN}skills remove${NC} <repo>     Remove a skill from global list"
+  echo -e "  ${CYAN}skills install${NC} [-y]      Install saved skills (interactive picker)"
+  echo ""
+  echo -e "${BOLD}DEFAULTS${NC}"
+  echo -e "  ${CYAN}defaults load${NC}            Load bundled default memories and skills"
+  echo -e "  ${CYAN}defaults list${NC}            Preview bundled defaults"
+  echo ""
+  echo -e "${BOLD}COMBINED${NC}"
+  echo -e "  ${CYAN}setup${NC} [dir] [-y]         Full setup: memories + skills"
+  echo ""
+  echo -e "${BOLD}FLAGS${NC}"
+  echo -e "  ${CYAN}-y, --yes${NC}                Skip interactive picker, select all"
+  echo ""
+  echo -e "${BOLD}EXAMPLES${NC}"
+  echo "  claude-prefs import all                    # Import all projects' memories"
+  echo "  claude-prefs sync all                      # Push global memories to all projects"
+  echo "  claude-prefs setup ~/new-project           # Interactive setup for new project"
+  echo "  claude-prefs setup -y                      # Auto setup, install everything"
+  echo "  claude-prefs skills add anthropics/skills  # Save a skill repo"
+  echo "  claude-prefs skills install                # Pick which skills to install"
+}
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
+command="${1:-help}"
+shift || true
+
+case "$command" in
+  list)    cmd_list "$@" ;;
+  status)  cmd_status "$@" ;;
+  add)     cmd_add "$@" ;;
+  remove)  cmd_remove "$@" ;;
+  init)    cmd_init "$@" ;;
+  sync)    cmd_sync "$@" ;;
+  import)  cmd_import "$@" ;;
+  skills)   cmd_skills "$@" ;;
+  defaults) cmd_defaults "$@" ;;
+  setup)    cmd_setup "$@" ;;
+  help|-h|--help) cmd_help ;;
+  *)
+    echo -e "${RED}Unknown command: $command${NC}"
+    cmd_help
+    exit 1
+    ;;
+esac

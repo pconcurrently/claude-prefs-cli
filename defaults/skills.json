@@ -1,0 +1,27 @@
+[
+  {
+    "repo": "vercel-labs/agent-skills",
+    "skill": "web-design-guidelines",
+    "description": "Web design guidelines and best practices"
+  },
+  {
+    "repo": "vercel-labs/agent-skills",
+    "skill": "vercel-react-best-practices",
+    "description": "React best practices from Vercel"
+  },
+  {
+    "repo": "vercel-labs/agent-skills",
+    "skill": "vercel-composition-patterns",
+    "description": "Component composition patterns"
+  },
+  {
+    "repo": "vercel-labs/agent-skills",
+    "skill": "vercel-react-native-skills",
+    "description": "React Native development skills"
+  },
+  {
+    "repo": "vercel-labs/agent-skills",
+    "skill": "vercel-cli-with-tokens",
+    "description": "Vercel CLI usage with tokens"
+  }
+]
