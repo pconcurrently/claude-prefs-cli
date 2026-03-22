@@ -4,6 +4,7 @@ set -euo pipefail
 
 CYAN='\033[0;36m'
 GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
 DIM='\033[0;90m'
 BOLD='\033[1m'
 NC='\033[0m'
@@ -16,6 +17,20 @@ SETTINGS_FILE="$HOME/.claude/settings.json"
 
 echo -e "${BOLD}Installing claude-prefs${NC}"
 echo ""
+
+# Check if Claude Code is installed
+if ! command -v claude &>/dev/null && [[ ! -d "$HOME/.claude" ]]; then
+  echo -e "  ${YELLOW}Warning:${NC} Claude Code does not appear to be installed."
+  echo -e "  ${DIM}Install it first: https://docs.anthropic.com/en/docs/claude-code${NC}"
+  echo ""
+  read -rp "Continue anyway? [y/N] " answer
+  answer="${answer:-n}"
+  if [[ ! "$answer" =~ ^[Yy] ]]; then
+    echo "Aborted."
+    exit 0
+  fi
+  echo ""
+fi
 
 # 1. Clone or update the repo (so defaults/ is available)
 mkdir -p "$INSTALL_DIR"
