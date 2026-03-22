@@ -39,12 +39,18 @@ fi
 # ---------------------------------------------------------------------------
 
 # Multi-select picker that writes results to a temp file
-# Usage: multi_select <result_file> <prompt> <label1> <key1> <label2> <key2> ...
+# Usage: multi_select <result_file> <prompt> [--default-off] <label1> <key1> <label2> <key2> ...
 # Selected keys are written to result_file, one per line
 multi_select() {
   local result_file="$1"
   local prompt="$2"
   shift 2
+
+  local default_on=1
+  if [[ "${1:-}" == "--default-off" ]]; then
+    default_on=0
+    shift
+  fi
 
   local -a labels=()
   local -a keys=()
@@ -54,7 +60,7 @@ multi_select() {
   while [[ $# -gt 0 ]]; do
     labels+=("$1")
     keys+=("$2")
-    selected+=(1)  # all selected by default
+    selected+=($default_on)
     shift 2
   done
 
@@ -551,7 +557,7 @@ cmd_remove_here() {
     defaults+=(0)
   done
 
-  multi_select "$tmp_result" "Select memories to remove from project:" "${picker_args[@]}"
+  multi_select "$tmp_result" "Select memories to remove from project:" --default-off "${picker_args[@]}"
 
   local -a chosen=()
   while IFS= read -r line; do
