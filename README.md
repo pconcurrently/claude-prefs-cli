@@ -4,7 +4,7 @@ A CLI tool to manage global Claude Code memories and skills across all your proj
 
 **Problem:** Claude Code stores memories per-project. When you start a new project, your preferences (commit style, package manager, coding conventions) don't carry over. You have to re-teach Claude every time.
 
-**Solution:** `claude-prefs` maintains a central store of global memories and a saved skills list. Initialize any project in one command with an interactive picker to choose what to include.
+**Solution:** `claude-prefs` (alias: `ccp`) maintains a central store of global memories and a saved skills list. Initialize any project in one command with an interactive picker to choose what to include.
 
 ## Prerequisites
 
@@ -26,37 +26,39 @@ This will:
 
 1. Check that Claude Code is installed
 2. Clone the repo to `~/.claude/claude-prefs-cli/`
-3. Symlink `claude-prefs` to `~/.claude/bin/`
+3. Symlink `claude-prefs` and `ccp` alias to `~/.claude/bin/`
 4. Add `~/.claude/bin` to your PATH
-5. Add `Bash(claude-prefs *)` permission to Claude Code settings
+5. Add `Bash(claude-prefs *)` and `Bash(ccp *)` permissions to Claude Code settings
 6. Offer to load bundled default memories and skills
 
 ## Quick start
 
+All commands work with both `claude-prefs` and `ccp`:
+
 ```bash
 # Import your existing memories from all projects into the global store
-claude-prefs import all
+ccp import all
 
 # Review what was imported
-claude-prefs list
+ccp list
 
 # Check current project's memories
-claude-prefs list here
+ccp list here
 
 # Install a skill by name (searches skills.sh)
-claude-prefs skills install conventional-commit
+ccp skills install conventional-commit
 
 # Load defaults globally
-claude-prefs setup
+ccp setup
 
 # Initialize a project (memories + skills)
 cd ~/my-new-project
-claude-prefs init
+ccp init
 ```
 
 ## Commands
 
-Run `claude-prefs help` for the full list.
+Run `ccp help` for the full list.
 
 | Command | Description |
 | --- | --- |
@@ -96,6 +98,7 @@ All interactive commands support `-y` / `--yes` to skip the picker and select ev
   skills/                  # Global skills (shared by all projects)
   bin/
     claude-prefs -> ...    # Symlink to the CLI
+    ccp -> ...             # Short alias
   projects/
     -Users-you-project-a/
       memory/              # Per-project memories (synced from global)
@@ -118,7 +121,7 @@ All interactive commands support `-y` / `--yes` to skip the picker and select ev
 - `import all` pulls non-project-specific memories from all projects into global (deduplicates automatically).
 - `list here` shows the current project's memories with sync status (synced, modified locally, local only).
 - **Skills** are managed via [skills.sh](https://skills.sh/) - `claude-prefs` saves your list and installs them with `npx skills add`.
-- **Updates** are checked automatically once per day. Run `claude-prefs update` to pull the latest version and load any new bundled defaults.
+- **Updates** are checked automatically once per day. Run `ccp update` to pull the latest version and load any new bundled defaults.
 
 ## License
 

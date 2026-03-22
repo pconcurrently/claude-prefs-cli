@@ -1,6 +1,6 @@
 # Guide
 
-A walkthrough of common workflows with `claude-prefs`.
+A walkthrough of common workflows with `claude-prefs` (alias: `ccp`).
 
 ## Building your global memory store
 
@@ -9,7 +9,7 @@ A walkthrough of common workflows with `claude-prefs`.
 If you already have Claude Code projects with memories, import them all at once:
 
 ```bash
-claude-prefs import all
+ccp import all
 ```
 
 This scans every project under `~/.claude/projects/`, finds memory files, and copies them to the global store. It automatically:
@@ -21,14 +21,14 @@ This scans every project under `~/.claude/projects/`, finds memory files, and co
 After importing, check what you have:
 
 ```bash
-claude-prefs list
+ccp list
 ```
 
 Remove anything project-specific that slipped through. Supports fuzzy matching:
 
 ```bash
-claude-prefs remove sim_data       # lists all matching memories
-claude-prefs remove feedback_sim_data_maker.md  # exact match
+ccp remove sim_data       # lists all matching memories
+ccp remove feedback_sim_data_maker.md  # exact match
 ```
 
 ### Adding memories manually
@@ -37,11 +37,11 @@ If you have a memory file you want to share globally:
 
 ```bash
 # From a file path
-claude-prefs add ~/code4po/my-project/.claude/memory/feedback_testing.md
+ccp add ~/code4po/my-project/.claude/memory/feedback_testing.md
 
 # Or from the current project's memory dir (just the filename)
 cd ~/code4po/my-project
-claude-prefs add feedback_testing.md
+ccp add feedback_testing.md
 ```
 
 ## Global setup
@@ -49,7 +49,7 @@ claude-prefs add feedback_testing.md
 Load bundled defaults (memories and skills) into your global store:
 
 ```bash
-claude-prefs setup
+ccp setup
 ```
 
 This adds any new defaults that aren't already in your global store, then asks if you want to initialize the current project.
@@ -60,7 +60,7 @@ This adds any new defaults that aren't already in your global store, then asks i
 
 ```bash
 cd ~/code4po/new-project
-claude-prefs init
+ccp init
 ```
 
 This runs two steps:
@@ -88,7 +88,7 @@ Select memories to install:
 Skip the pickers and install everything:
 
 ```bash
-claude-prefs init -y
+ccp init -y
 ```
 
 ## Managing skills
@@ -96,7 +96,7 @@ claude-prefs init -y
 ### Install a skill (search + download)
 
 ```bash
-claude-prefs skills install conventional-commit
+ccp skills install conventional-commit
 ```
 
 This searches [skills.sh](https://skills.sh/), downloads the skill, and adds it to the global list. It resolves in order:
@@ -108,13 +108,13 @@ This searches [skills.sh](https://skills.sh/), downloads the skill, and adds it 
 You can also use the full `owner/repo` format with `--skill`:
 
 ```bash
-claude-prefs skills install vercel-labs/agent-skills --skill web-design-guidelines
+ccp skills install vercel-labs/agent-skills --skill web-design-guidelines
 ```
 
 ### Add skills to project
 
 ```bash
-claude-prefs skills add
+ccp skills add
 ```
 
 Shows an interactive picker of saved skills. Selected skills are symlinked into both `~/.claude/skills/` (global) and the current project's `.claude/skills/`. Use `-y` to add all without prompting.
@@ -122,7 +122,7 @@ Shows an interactive picker of saved skills. Selected skills are symlinked into 
 ### View saved skills
 
 ```bash
-claude-prefs skills list
+ccp skills list
 ```
 
 ### Remove a skill
@@ -130,8 +130,8 @@ claude-prefs skills list
 Supports exact or fuzzy matching:
 
 ```bash
-claude-prefs skills remove conventional-commit
-claude-prefs skills remove dotnet    # lists all matching skills
+ccp skills remove conventional-commit
+ccp skills remove dotnet    # lists all matching skills
 ```
 
 This removes it from your saved list only. It does not uninstall from existing projects.
@@ -141,7 +141,7 @@ This removes it from your saved list only. It does not uninstall from existing p
 To see what memories are installed in the current project:
 
 ```bash
-claude-prefs list here
+ccp list here
 ```
 
 Each memory shows its sync status:
@@ -153,7 +153,7 @@ Each memory shows its sync status:
 To see your global memories:
 
 ```bash
-claude-prefs list
+ccp list
 ```
 
 ## Using defaults
@@ -163,16 +163,16 @@ The repo ships with bundled default memories and skills in `defaults/`.
 Preview what's included:
 
 ```bash
-claude-prefs defaults list
+ccp defaults list
 ```
 
 Load them into your global store:
 
 ```bash
-claude-prefs defaults load
+ccp defaults load
 ```
 
-This is also done automatically when you run `claude-prefs setup` or `claude-prefs update`. Defaults never overwrite existing entries - they only add what's missing.
+This is also done automatically when you run `ccp setup` or `ccp update`. Defaults never overwrite existing entries - they only add what's missing.
 
 ## Keeping projects in sync
 
@@ -181,7 +181,7 @@ This is also done automatically when you run `claude-prefs setup` or `claude-pre
 After updating a global memory, sync it to all projects that have memory directories:
 
 ```bash
-claude-prefs sync all
+ccp sync all
 ```
 
 Only changed or missing files are copied. Projects without a memory directory are skipped.
@@ -189,13 +189,13 @@ Only changed or missing files are copied. Projects without a memory directory ar
 ### Sync just the current project
 
 ```bash
-claude-prefs sync here
+ccp sync here
 ```
 
 ### Check sync status
 
 ```bash
-claude-prefs status
+ccp status
 ```
 
 Shows each project and how many memories are synced, outdated, or missing:
@@ -232,24 +232,24 @@ Types: `feedback`, `user`, `project`, `reference`. See the [Claude Code docs](ht
 
 ## Updating
 
-`claude-prefs` checks for updates once per day. When an update is available, you'll see:
+`ccp` checks for updates once per day. When an update is available, you'll see:
 
 ```text
-Update available! Run claude-prefs update to update.
+Update available! Run ccp update to update.
 ```
 
 Run the update:
 
 ```bash
-claude-prefs update
+ccp update
 ```
 
 This pulls the latest changes and automatically loads any new bundled defaults (memories and skills).
 
 ## Tips
 
-- **Import regularly.** Run `claude-prefs import all` periodically to pick up new memories from active projects.
+- **Import regularly.** Run `ccp import all` periodically to pick up new memories from active projects.
 - **Curate aggressively.** Not every memory belongs in global. Project-specific patterns, architecture decisions, and domain knowledge should stay local.
 - **Use `sync all` after edits.** If you update a global memory file directly, run sync to push the change everywhere.
-- **Let Claude use it.** Add `Bash(claude-prefs *)` to your permissions so Claude can run `claude-prefs setup` when you start a new project.
+- **Let Claude use it.** Add `Bash(claude-prefs *)` and `Bash(ccp *)` to your permissions so Claude can run `ccp setup` when you start a new project.
 - **Works from subdirectories.** `init` resolves the git root, so you don't need to be at the project root.

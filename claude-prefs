@@ -6,7 +6,7 @@ set -euo pipefail
 
 REPO_URL="https://github.com/pconcurrently/claude-prefs-cli"
 
-trap 'echo -e "\n\033[0;90mIf this looks like a bug, try: claude-prefs update\033[0m"; echo -e "\033[0;90mOr report it at: ${REPO_URL}/issues\033[0m"' ERR
+trap 'echo -e "\n\033[0;90mIf this looks like a bug, try: ccp update\033[0m"; echo -e "\033[0;90mOr report it at: ${REPO_URL}/issues\033[0m"' ERR
 
 CLAUDE_DIR="$HOME/.claude"
 GLOBAL_DIR="$CLAUDE_DIR/global-memory"
@@ -391,7 +391,7 @@ cmd_sync() {
       ;;
     *)
       echo -e "${RED}Unknown sync mode: $mode${NC}"
-      echo "Usage: claude-prefs sync [all|here]"
+      echo "Usage: ccp sync [all|here]"
       exit 1
       ;;
   esac
@@ -431,9 +431,9 @@ cmd_remove() {
   fi
 
   if [[ -z "$pattern" ]]; then
-    echo -e "${RED}Usage: claude-prefs remove <name or pattern>${NC}"
-    echo "  claude-prefs remove here          # remove from current project (picker)"
-    echo "  claude-prefs remove here <name>   # remove specific memory from project"
+    echo -e "${RED}Usage: ccp remove <name or pattern>${NC}"
+    echo "  ccp remove here          # remove from current project (picker)"
+    echo "  ccp remove here <name>   # remove specific memory from project"
     exit 1
   fi
 
@@ -621,7 +621,7 @@ cmd_list() {
   done
 
   if [[ $count -eq 0 ]]; then
-    echo -e "  ${DIM}(empty - use 'claude-prefs add <file>' to add memories)${NC}"
+    echo -e "  ${DIM}(empty - use 'ccp add <file>' to add memories)${NC}"
   else
     echo ""
     echo -e "${DIM}$count global memories${NC}"
@@ -639,7 +639,7 @@ cmd_list_project() {
 
   if [[ ! -d "$mem_dir" ]]; then
     echo -e "  ${DIM}No memory directory for this project${NC}"
-    echo -e "  ${DIM}Run 'claude-prefs init' or 'claude-prefs setup' to create one${NC}"
+    echo -e "  ${DIM}Run 'ccp init' or 'ccp setup' to create one${NC}"
     return
   fi
 
@@ -780,7 +780,7 @@ cmd_import() {
       ;;
     *)
       echo -e "${RED}Unknown import scope: $scope${NC}"
-      echo "Usage: claude-prefs import [here|all]"
+      echo "Usage: ccp import [here|all]"
       exit 1
       ;;
   esac
@@ -846,7 +846,7 @@ cmd_skills() {
     install) skills_install "$@" ;;
     *)
       echo -e "${RED}Unknown skills command: $subcmd${NC}"
-      echo "Usage: claude-prefs skills [list|add|remove|install]"
+      echo "Usage: ccp skills [list|add|remove|install]"
       exit 1
       ;;
   esac
@@ -867,7 +867,7 @@ skills_list() {
   count=$(python3 -c "import json; print(len(json.load(open('$SKILLS_FILE'))))" 2>/dev/null || echo "0")
 
   if [[ "$count" == "0" ]]; then
-    echo -e "  ${DIM}(empty - use 'claude-prefs skills install <name>' to add skills)${NC}"
+    echo -e "  ${DIM}(empty - use 'ccp skills install <name>' to add skills)${NC}"
     return
   fi
 
@@ -897,7 +897,7 @@ skills_list_here() {
   echo ""
 
   if [[ ! -d "$project_skills_dir" ]]; then
-    echo -e "  ${DIM}(none - use 'claude-prefs skills add' to add skills to this project)${NC}"
+    echo -e "  ${DIM}(none - use 'ccp skills add' to add skills to this project)${NC}"
     return
   fi
 
@@ -918,7 +918,7 @@ skills_list_here() {
   done
 
   if [[ $count -eq 0 ]]; then
-    echo -e "  ${DIM}(none - use 'claude-prefs skills add' to add skills to this project)${NC}"
+    echo -e "  ${DIM}(none - use 'ccp skills add' to add skills to this project)${NC}"
     return
   fi
 
@@ -1438,7 +1438,7 @@ cmd_defaults() {
     list) defaults_list ;;
     *)
       echo -e "${RED}Unknown defaults command: $subcmd${NC}"
-      echo "Usage: claude-prefs defaults [load|list]"
+      echo "Usage: ccp defaults [load|list]"
       exit 1
       ;;
   esac
@@ -1591,12 +1591,12 @@ for s in skills:
     print(s['repo'] + '|' + s.get('skill', '') + '|' + s.get('flags', ''))
 " 2>/dev/null)
       echo ""
-      echo -e "${GREEN}Done!${NC} Run ${CYAN}claude-prefs init${NC} to add skills to a project."
+      echo -e "${GREEN}Done!${NC} Run ${CYAN}ccp init${NC} to add skills to a project."
     else
-      echo -e "${DIM}Run 'claude-prefs init' to download and add skills to a project.${NC}"
+      echo -e "${DIM}Run 'ccp init' to download and add skills to a project.${NC}"
     fi
   else
-    echo -e "${GREEN}Done!${NC} Run ${CYAN}claude-prefs init${NC} to add memories and skills to a project."
+    echo -e "${GREEN}Done!${NC} Run ${CYAN}ccp init${NC} to add memories and skills to a project."
   fi
 }
 
@@ -1690,7 +1690,7 @@ cmd_help() {
   echo -e "${BOLD}GENERAL${NC}"
   echo -e "  ${CYAN}init${NC} [dir] [-y]          Initialize project with memories + skills"
   echo -e "  ${CYAN}setup${NC}                    Load bundled defaults into global store"
-  echo -e "  ${CYAN}update${NC}                   Update claude-prefs to latest version"
+  echo -e "  ${CYAN}update${NC}                   Update ccp to latest version"
   echo ""
   echo -e "${BOLD}MEMORIES${NC}"
   echo -e "  ${CYAN}list${NC} [here]              List global memories (or current project's)"
@@ -1729,7 +1729,7 @@ check_for_updates() {
 
   # Show notification if a background check already found an update
   if [[ -f "$update_available_file" ]]; then
-    echo -e "${YELLOW}Update available!${NC} Run ${CYAN}claude-prefs update${NC} to update."
+    echo -e "${YELLOW}Update available!${NC} Run ${CYAN}ccp update${NC} to update."
     echo ""
   fi
 

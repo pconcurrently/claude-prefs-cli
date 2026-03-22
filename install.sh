@@ -103,7 +103,7 @@ if [[ "$answer" =~ ^[Yy] ]]; then
 fi
 
 echo ""
-echo -e "${GREEN}Done!${NC} Run ${CYAN}claude-prefs help${NC} to get started."
+echo -e "${GREEN}Done!${NC} Run ${CYAN}ccp help${NC} to get started."
 if [[ -n "$SHELL_RC" ]]; then
   echo -e "${DIM}If the command is not found, run: source $SHELL_RC${NC}"
 fi
