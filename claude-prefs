@@ -1058,73 +1058,71 @@ json.dump(skills, open('$SKILLS_FILE', 'w'), indent=2)
 skills_remove() {
   local input="${1:-}"
 
-  if [[ -z "$input" ]]; then
-    echo -e "${RED}Usage: claude-prefs skills remove <name or pattern>${NC}"
-    exit 1
-  fi
+  # Build list of all skills (or filter by input)
+  local -a skill_labels=()
+  local -a skill_keys=()
 
-  # Find matching skills (exact or partial)
-  local matches
-  matches=$(python3 -c "
+  local idx=0
+  while IFS='|' read -r repo skill desc; do
+    local label="$repo"
+    [[ -n "$skill" ]] && label="$label / $skill"
+    [[ -n "$desc" ]] && label="$label  ($desc)"
+
+    # If input given, filter by fuzzy match
+    if [[ -n "$input" ]]; then
+      if [[ "$skill" != *"$input"* && "$repo" != *"$input"* ]]; then
+        idx=$((idx + 1))
+        continue
+      fi
+    fi
+
+    skill_labels+=("$label")
+    skill_keys+=("$idx")
+    idx=$((idx + 1))
+  done < <(python3 -c "
 import json
 skills = json.load(open('$SKILLS_FILE'))
-inp = '$input'
-found = []
-for i, s in enumerate(skills):
-    skill = s.get('skill', '')
-    repo = s['repo']
-    label = f'{repo} / {skill}' if skill else repo
-    if inp == skill or inp == repo:
-        found.append((i, label))
-    elif inp.lower() in skill.lower() or inp.lower() in repo.lower():
-        found.append((i, label))
-for idx, label in found:
-    print(f'{idx}|{label}')
-" 2>/dev/null)
+for s in skills:
+    print(s['repo'] + '|' + s.get('skill', '') + '|' + s.get('description', ''))
+")
 
-  if [[ -z "$matches" ]]; then
-    echo -e "${RED}No skills matching: $input${NC}"
-    exit 1
-  fi
-
-  local -a match_indices=()
-  local -a match_labels=()
-  while IFS='|' read -r idx label; do
-    match_indices+=("$idx")
-    match_labels+=("$label")
-  done <<< "$matches"
-
-  echo -e "${BOLD}Skills matching '${input}':${NC}"
-  echo ""
-  for i in "${!match_labels[@]}"; do
-    echo -e "  $((i + 1)). ${CYAN}${match_labels[$i]}${NC}"
-  done
-  echo ""
-
-  local to_remove=()
-  if [[ ${#match_labels[@]} -eq 1 ]]; then
-    read -rp "Remove this skill? [Y/n] " answer
-    answer="${answer:-y}"
-    [[ "$answer" =~ ^[Yy] ]] && to_remove=("${match_indices[0]}")
-  else
-    read -rp "Enter number to remove (or 'a' for all, empty to cancel): " choice
-    if [[ "$choice" == "a" || "$choice" == "A" ]]; then
-      to_remove=("${match_indices[@]}")
-    elif [[ "$choice" =~ ^[0-9]+$ && "$choice" -ge 1 && "$choice" -le ${#match_labels[@]} ]]; then
-      to_remove=("${match_indices[$((choice - 1))]}")
+  if [[ ${#skill_keys[@]} -eq 0 ]]; then
+    if [[ -n "$input" ]]; then
+      echo -e "${RED}No skills matching: $input${NC}"
+    else
+      echo -e "${DIM}No skills saved${NC}"
     fi
+    return
   fi
 
-  if [[ ${#to_remove[@]} -eq 0 ]]; then
-    echo -e "${DIM}Cancelled${NC}"
+  # Use multi-select picker (default off)
+  local tmp_result
+  tmp_result=$(mktemp)
+
+  local picker_args=()
+  for i in $(seq 0 $((${#skill_keys[@]} - 1))); do
+    picker_args+=("${skill_labels[$i]}" "${skill_keys[$i]}")
+  done
+
+  multi_select "$tmp_result" "Select skills to remove:" --default-off "${picker_args[@]}"
+
+  local -a chosen=()
+  while IFS= read -r line; do
+    [[ -n "$line" ]] && chosen+=("$line")
+  done < "$tmp_result"
+  rm -f "$tmp_result"
+
+  if [[ ${#chosen[@]} -eq 0 ]]; then
+    echo -e "${DIM}No skills selected${NC}"
     return
   fi
 
   # Remove by indices (reverse order to preserve positions)
   local indices_json
-  indices_json=$(printf '%s,' "${to_remove[@]}")
+  indices_json=$(printf '%s,' "${chosen[@]}")
   indices_json="[${indices_json%,}]"
 
+  echo ""
   python3 -c "
 import json
 skills = json.load(open('$SKILLS_FILE'))
@@ -1139,8 +1137,11 @@ json.dump(skills, open('$SKILLS_FILE', 'w'), indent=2)
 for label in removed:
     print(label)
 " 2>/dev/null | while IFS= read -r label; do
-    echo -e "${GREEN}Removed:${NC} $label"
+    echo -e "  ${GREEN}-${NC} $label"
   done
+
+  echo ""
+  echo -e "${GREEN}Removed ${#chosen[@]} skills${NC}"
 }
 
 skills_add() {
@@ -1159,7 +1160,7 @@ skills_add() {
         ;;
     esac
   done
-  set -- "${args[@]}"
+  set -- "${args[@]+"${args[@]}"}"
 
   local count
   count=$(python3 -c "import json; print(len(json.load(open('$SKILLS_FILE'))))" 2>/dev/null || echo "0")
