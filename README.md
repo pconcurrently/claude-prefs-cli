@@ -29,7 +29,7 @@ This will:
 3. Symlink `claude-prefs` and `ccp` alias to `~/.claude/bin/`
 4. Add `~/.claude/bin` to your PATH
 5. Add `Bash(claude-prefs *)` and `Bash(ccp *)` permissions to Claude Code settings
-6. Offer to load bundled default memories and skills
+6. Suggest running `ccp setup` to load defaults and initialize your project
 
 ## Quick start
 
