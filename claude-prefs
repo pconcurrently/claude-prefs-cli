@@ -1150,18 +1150,60 @@ for s in skills:
       # Search skills.sh
       echo -e "${DIM}Searching skills.sh for '$input'...${NC}"
       local find_result
-      find_result=$(npx --yes skills find "$input" 2>/dev/null | head -20)
+      find_result=$(npx --yes skills find "$input" 2>/dev/null || true)
 
-      local top_match
-      top_match=$(echo "$find_result" | sed 's/\x1b\[[0-9;]*m//g' | grep -m1 '@' | awk '{print $1}')
+      # Parse all matches (lines containing owner/repo@skill)
+      local -a match_entries=()
+      while IFS= read -r line; do
+        local clean
+        clean=$(echo "$line" | sed 's/\x1b\[[0-9;]*m//g')
+        local entry
+        entry=$(echo "$clean" | grep -o '[^ ]*@[^ ]*' | head -1 || true)
+        [[ -n "$entry" && "$entry" != *"<"* ]] && match_entries+=("$entry")
+      done <<< "$find_result"
 
-      if [[ -z "$top_match" ]]; then
+      if [[ ${#match_entries[@]} -eq 0 ]]; then
         echo -e "${RED}No skills found matching '$input'${NC}"
         return 1
       fi
 
-      repo="${top_match%@*}"
-      skill="${top_match#*@}"
+      if [[ ${#match_entries[@]} -eq 1 ]]; then
+        # Single match - use directly
+        repo="${match_entries[0]%@*}"
+        skill="${match_entries[0]#*@}"
+      elif [[ -t 0 ]]; then
+        # Multiple matches - show picker
+        echo ""
+        local tmp_result
+        tmp_result=$(mktemp)
+        local picker_args=()
+        for entry in "${match_entries[@]}"; do
+          local entry_repo="${entry%@*}"
+          local entry_skill="${entry#*@}"
+          picker_args+=("$entry_repo / $entry_skill" "$entry")
+        done
+        multi_select "$tmp_result" "Select skills to install:" --default-off "${picker_args[@]}"
+        local -a chosen_entries=()
+        while IFS= read -r line; do
+          [[ -n "$line" ]] && chosen_entries+=("$line")
+        done < "$tmp_result"
+        rm -f "$tmp_result"
+        echo ""
+
+        if [[ ${#chosen_entries[@]} -eq 0 ]]; then
+          echo -e "${DIM}No skill selected${NC}"
+          return
+        fi
+
+        # Install first choice in current flow, then recurse for the rest
+        repo="${chosen_entries[0]%@*}"
+        skill="${chosen_entries[0]#*@}"
+      else
+        # Non-interactive with multiple matches - use first
+        repo="${match_entries[0]%@*}"
+        skill="${match_entries[0]#*@}"
+      fi
+
       echo -e "${GREEN}Found:${NC} $repo --skill $skill"
     fi
   fi
@@ -1216,6 +1258,15 @@ json.dump(skills, open('$SKILLS_FILE', 'w'), indent=2)
     else
       echo -e "${DIM}-${NC} Already in project ${DIM}($project_skills_dir/$skill_name)${NC}"
     fi
+  fi
+
+  # Install remaining picker selections (if any)
+  if [[ "${chosen_entries+set}" == "set" && ${#chosen_entries[@]} -gt 1 ]]; then
+    for i in $(seq 1 $((${#chosen_entries[@]} - 1))); do
+      local extra_repo="${chosen_entries[$i]%@*}"
+      local extra_skill="${chosen_entries[$i]#*@}"
+      skills_install "$extra_repo" "--skill $extra_skill"
+    done
   fi
 }
 
@@ -1482,7 +1533,8 @@ for s in skills:
         fi
       done
       if [[ "$found" == false ]]; then
-        echo -e "${RED}Skill not found in saved list: $name${NC}"
+        # Not in saved list - search and install via skills_install
+        skills_install "$name"
       fi
     done
   elif has_yes_flag "${flag_args[@]+"${flag_args[@]}"}"; then
