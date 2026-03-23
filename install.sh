@@ -138,7 +138,7 @@ fi
 
 # 6. Offer to run setup
 echo ""
-read -rp "Run setup now? (loads defaults + inits current project) [Y/n] " answer
+read -rp "Run setup now? (loads defaults + inits current project) [Y/n] " answer </dev/tty
 answer="${answer:-y}"
 if [[ "$answer" =~ ^[Yy] ]]; then
   echo ""
