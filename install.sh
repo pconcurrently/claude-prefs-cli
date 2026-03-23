@@ -136,14 +136,14 @@ $CCP_MARKER
   echo -e "  ${GREEN}Added ccp reference to ~/.claude/CLAUDE.md${NC}"
 fi
 
-# 6. Offer to load defaults
+# 6. Offer to run setup
 echo ""
-read -rp "Load default memories and skills? [Y/n] " answer
+read -rp "Run setup now? (loads defaults + inits current project) [Y/n] " answer
 answer="${answer:-y}"
 if [[ "$answer" =~ ^[Yy] ]]; then
   echo ""
   export PATH="$INSTALL_DIR:$PATH"
-  claude-prefs defaults load
+  claude-prefs setup
 fi
 
 echo ""
