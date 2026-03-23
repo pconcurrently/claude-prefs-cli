@@ -1745,7 +1745,6 @@ defaults_load_quiet() {
     filename=$(basename "$file")
     [[ -f "$GLOBAL_DIR/$filename" ]] && continue
     cp "$file" "$GLOBAL_DIR/$filename"
-    echo -e "  ${GREEN}+ $filename${NC}"
     mem_count=$((mem_count + 1))
   done
 
