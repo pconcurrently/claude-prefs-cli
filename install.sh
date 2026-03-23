@@ -136,8 +136,18 @@ $CCP_MARKER
   echo -e "  ${GREEN}Added ccp reference to ~/.claude/CLAUDE.md${NC}"
 fi
 
+# 6. Offer to run setup
 echo ""
-echo -e "${GREEN}Done!${NC} Run ${CYAN}ccp setup${NC} to load defaults and initialize your project."
+read -rp "Run setup now? (loads defaults + inits current project) [Y/n] " answer </dev/tty
+answer="${answer:-y}"
+if [[ "$answer" =~ ^[Yy] ]]; then
+  echo ""
+  export PATH="$INSTALL_DIR:$PATH"
+  claude-prefs setup
+fi
+
+echo ""
+echo -e "${GREEN}Done!${NC} Run ${CYAN}ccp help${NC} to get started."
 if [[ -n "$SHELL_RC" ]]; then
   echo -e "${DIM}If the command is not found, run: source $SHELL_RC${NC}"
 fi
