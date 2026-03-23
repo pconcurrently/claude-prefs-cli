@@ -264,6 +264,8 @@ cmd_init() {
     local filename
     filename=$(basename "$file")
     [[ "$filename" == "MEMORY.md" ]] && continue
+    # Skip memories already in the project
+    [[ -f "$target_dir/$filename" ]] && continue
 
     local type
     type=$(get_memory_type "$file")
@@ -1145,8 +1147,24 @@ for s in skills:
     if [[ -n "$found_entry" ]]; then
       repo="${found_entry%|*}"
       skill="${found_entry#*|}"
-      echo -e "${GREEN}Found in global list:${NC} $repo / $skill"
-    else
+      local found_skill_name="${skill:-$(basename "$repo")}"
+      local found_git_root
+      found_git_root=$(get_git_root "$(pwd)")
+      if [[ -e "$found_git_root/.claude/skills/$found_skill_name" && -t 0 ]]; then
+        echo -e "${DIM}Already installed:${NC} $repo / $skill"
+        echo -ne "${BOLD}Search skills.sh for more '$input' skills?${NC} [Y/n] "
+        local reply
+        read -r reply </dev/tty
+        if [[ "$reply" =~ ^[Nn] ]]; then
+          return
+        fi
+        found_entry=""
+      else
+        echo -e "${GREEN}Found in global list:${NC} $repo / $skill"
+      fi
+    fi
+
+    if [[ -z "$found_entry" ]]; then
       # Search skills.sh
       echo -e "${DIM}Searching skills.sh for '$input'...${NC}"
       local find_result
@@ -1165,6 +1183,23 @@ for s in skills:
       if [[ ${#match_entries[@]} -eq 0 ]]; then
         echo -e "${RED}No skills found matching '$input'${NC}"
         return 1
+      fi
+
+      # Filter out already-installed skills
+      local filter_git_root
+      filter_git_root=$(get_git_root "$(pwd)")
+      local filter_skills_dir="$filter_git_root/.claude/skills"
+      local -a filtered_entries=()
+      for entry in "${match_entries[@]}"; do
+        local entry_skill="${entry#*@}"
+        [[ -e "$filter_skills_dir/$entry_skill" ]] && continue
+        filtered_entries+=("$entry")
+      done
+      match_entries=("${filtered_entries[@]+"${filtered_entries[@]}"}")
+
+      if [[ ${#match_entries[@]} -eq 0 ]]; then
+        echo -e "${DIM}All matching skills already installed${NC}"
+        return
       fi
 
       if [[ ${#match_entries[@]} -eq 1 ]]; then
@@ -1256,16 +1291,59 @@ json.dump(skills, open('$SKILLS_FILE', 'w'), indent=2)
       ln -sf "$agents_dir/$skill_name" "$project_skills_dir/$skill_name"
       echo -e "${GREEN}+${NC} Symlinked to ${DIM}$project_skills_dir/$skill_name${NC}"
     else
-      echo -e "${DIM}-${NC} Already in project ${DIM}($project_skills_dir/$skill_name)${NC}"
+      :  # Already in project, skip silently
     fi
   fi
 
-  # Install remaining picker selections (if any)
+  # Install remaining picker selections
+  # Note: can't use recursive skills_install here because bash local
+  # variables are visible to called functions, causing chosen_entries
+  # to be seen by the recursive call and loop infinitely.
   if [[ "${chosen_entries+set}" == "set" && ${#chosen_entries[@]} -gt 1 ]]; then
     for i in $(seq 1 $((${#chosen_entries[@]} - 1))); do
       local extra_repo="${chosen_entries[$i]%@*}"
       local extra_skill="${chosen_entries[$i]#*@}"
-      skills_install "$extra_repo" "--skill $extra_skill"
+      local extra_skill_name="${extra_skill:-$(basename "$extra_repo")}"
+
+      echo -e "${GREEN}Found:${NC} $extra_repo --skill $extra_skill"
+
+      # Add to global list if not already there
+      local extra_exists
+      extra_exists=$(python3 -c "
+import json
+skills = json.load(open('$SKILLS_FILE'))
+print('yes' if any(s['repo'] == '$extra_repo' and s.get('skill', '') == '$extra_skill' for s in skills) else 'no')
+" 2>/dev/null || echo "no")
+
+      if [[ "$extra_exists" != "yes" ]]; then
+        python3 -c "
+import json
+entry = {'repo': '$extra_repo'}
+if '$extra_skill': entry['skill'] = '$extra_skill'
+skills = json.load(open('$SKILLS_FILE'))
+skills.append(entry)
+json.dump(skills, open('$SKILLS_FILE', 'w'), indent=2)
+"
+        echo -e "${GREEN}Added to skills list:${NC} $extra_repo / $extra_skill"
+      fi
+
+      # Fetch if not already downloaded
+      if [[ ! -d "$agents_dir/$extra_skill_name" ]]; then
+        echo ""
+        echo -e "${CYAN}↓${NC} Fetching $extra_skill_name..."
+        local extra_install_flags="-y -g"
+        [[ -n "$extra_skill" ]] && extra_install_flags="$extra_install_flags --skill $extra_skill"
+        npx --yes skills add "$extra_repo" $extra_install_flags 2>&1 | sed 's/^/  /'
+      fi
+
+      # Symlink to current project
+      if [[ -d "$agents_dir/$extra_skill_name" ]]; then
+        mkdir -p "$project_skills_dir"
+        if [[ ! -e "$project_skills_dir/$extra_skill_name" ]]; then
+          ln -sf "$agents_dir/$extra_skill_name" "$project_skills_dir/$extra_skill_name"
+          echo -e "${GREEN}+${NC} Symlinked to ${DIM}$project_skills_dir/$extra_skill_name${NC}"
+        fi
+      fi
     done
   fi
 }
@@ -1499,8 +1577,21 @@ skills_add() {
   local -a skill_skills=()
   local -a skill_flags_arr=()
 
+  local project_skills_dir
+  if [[ -n "$project_dir" ]]; then
+    project_skills_dir="$project_dir/.claude/skills"
+  else
+    project_skills_dir="$(get_git_root "$(pwd)")/.claude/skills"
+  fi
+
   local idx=0
   while IFS='|' read -r repo skill flags desc; do
+    local skill_name="${skill:-$(basename "$repo")}"
+    # Skip skills already linked in the project
+    if [[ -e "$project_skills_dir/$skill_name" ]]; then
+      idx=$((idx + 1))
+      continue
+    fi
     local label="$repo"
     [[ -n "$skill" ]] && label="$label --skill $skill"
     [[ -n "$desc" ]] && label="$label  ${DIM}($desc)${NC}"
