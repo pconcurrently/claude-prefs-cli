@@ -1077,7 +1077,7 @@ for s in skills:
     local install_flags="-y -g"
     [[ -n "$skill" ]] && install_flags="$install_flags --skill $skill"
     [[ -n "$flags" ]] && install_flags="$install_flags $flags"
-    npx skills add "$repo" $install_flags 2>&1 | sed 's/^/    /'
+    npx --yes skills add "$repo" $install_flags 2>&1 | sed 's/^/    /'
   done < <(python3 -c "
 import json
 skills = json.load(open('$SKILLS_FILE'))
@@ -1204,7 +1204,7 @@ json.dump(skills, open('$SKILLS_FILE', 'w'), indent=2)
     local install_flags="-y -g"
     [[ -n "$skill" ]] && install_flags="$install_flags --skill $skill"
     [[ -n "$flags" && "$flags" != *"--skill"* ]] && install_flags="$install_flags $flags"
-    npx skills add "$repo" $install_flags 2>&1 | sed 's/^/  /'
+    npx --yes skills add "$repo" $install_flags 2>&1 | sed 's/^/  /'
   fi
 
   # Symlink to current project
@@ -1540,7 +1540,7 @@ for s in skills:
       [[ -n "$skill" ]] && install_flags="$install_flags --skill $skill"
       [[ -n "$flags" ]] && install_flags="$install_flags $flags"
 
-      npx skills add "$repo" $install_flags 2>&1 | sed 's/^/    /'
+      npx --yes skills add "$repo" $install_flags 2>&1 | sed 's/^/    /'
       fetched=$((fetched + 1))
     fi
 
@@ -1715,7 +1715,7 @@ for s in skills:
         local install_flags="-y -g"
         [[ -n "$skill" ]] && install_flags="$install_flags --skill $skill"
         [[ -n "$flags" ]] && install_flags="$install_flags $flags"
-        npx skills add "$repo" $install_flags 2>&1 | sed 's/^/    /'
+        npx --yes skills add "$repo" $install_flags 2>&1 | sed 's/^/    /'
       done < <(python3 -c "
 import json
 skills = json.load(open('$SKILLS_FILE'))
