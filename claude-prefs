@@ -860,7 +860,7 @@ cmd_import() {
 
   case "$scope" in
     here)
-      import_from_project "$(pwd)"
+      import_from_project "$(pwd)" "$@"
       ;;
     all)
       echo -e "${CYAN}Importing memories from all projects...${NC}"
@@ -903,6 +903,7 @@ cmd_import() {
 
 import_from_project() {
   local project_dir="$1"
+  shift || true
   local mem_dir
   mem_dir=$(get_project_memory_dir "$project_dir")
 
@@ -911,8 +912,65 @@ import_from_project() {
     exit 1
   fi
 
+  # Build list of importable memories (skip project-type and already-global)
+  local -a mem_labels=()
+  local -a mem_keys=()
+  for file in "$mem_dir"/*.md; do
+    [[ ! -f "$file" ]] && continue
+    local filename
+    filename=$(basename "$file")
+    [[ "$filename" == "MEMORY.md" ]] && continue
+
+    local type
+    type=$(get_memory_type "$file")
+    [[ "$type" == "project" ]] && continue
+    [[ -f "$GLOBAL_DIR/$filename" ]] && continue
+
+    local description
+    description=$(get_memory_description "$file")
+    local label="$filename"
+    [[ -n "$description" ]] && label="$filename - $description"
+    mem_labels+=("$label")
+    mem_keys+=("$filename")
+  done
+
+  if [[ ${#mem_keys[@]} -eq 0 ]]; then
+    echo -e "${DIM}No new memories to import${NC}"
+    return
+  fi
+
   echo -e "${CYAN}Importing memories from project...${NC}"
-  import_from_project_dir "$mem_dir" "  "
+
+  local -a chosen_files=()
+  local tmp_result
+  tmp_result=$(mktemp)
+
+  if has_yes_flag "$@"; then
+    chosen_files=("${mem_keys[@]}")
+  elif [[ -t 0 ]]; then
+    echo ""
+    local picker_args=()
+    for i in $(seq 0 $((${#mem_keys[@]} - 1))); do
+      picker_args+=("${mem_labels[$i]}" "${mem_keys[$i]}")
+    done
+    multi_select "$tmp_result" "Select memories to import:" "${picker_args[@]}"
+    while IFS= read -r line; do
+      [[ -n "$line" ]] && chosen_files+=("$line")
+    done < "$tmp_result"
+    rm -f "$tmp_result"
+    echo ""
+  else
+    chosen_files=("${mem_keys[@]}")
+  fi
+
+  local count=0
+  for filename in "${chosen_files[@]}"; do
+    cp "$mem_dir/$filename" "$GLOBAL_DIR/$filename"
+    echo -e "  ${GREEN}$filename${NC}"
+    count=$((count + 1))
+  done
+
+  echo -e "  ${GREEN}Imported $count memories${NC}"
 }
 
 import_from_project_dir() {
