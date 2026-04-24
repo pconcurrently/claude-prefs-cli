@@ -19,7 +19,7 @@ npm install -g @anthropic-ai/claude-code
 One-liner:
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/pconcurrently/claude-prefs-cli/main/install.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/pccly/claude-prefs-cli/main/install.sh)
 ```
 
 This will:
@@ -159,3 +159,20 @@ All commands have non-interactive forms that work without a TTY, so Claude Code 
 ## License
 
 MIT
+
+## macOS app prototype
+
+This repo now also includes a native macOS prototype in [macos-app/README.md](/Users/po/code4po/claude-prefs-cli/macos-app/README.md).
+
+It gives you a first desktop control center for:
+
+- memories from bundled defaults and `~/.claude/global-memory`
+- saved and installed skills from `~/.claude`, `~/.codex`, and `~/.agents`
+- plugin bundles from shared plugin directories
+
+Run it locally with:
+
+```bash
+cd macos-app
+swift run
+```

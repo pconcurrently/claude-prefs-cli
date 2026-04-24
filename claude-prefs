@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-REPO_URL="https://github.com/pconcurrently/claude-prefs-cli"
+REPO_URL="https://github.com/pccly/claude-prefs-cli"
 
 trap 'echo -e "\n\033[0;90mIf this looks like a bug, try: ccp update\033[0m"; echo -e "\033[0;90mOr report it at: ${REPO_URL}/issues\033[0m"' ERR
 

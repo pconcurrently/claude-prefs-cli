@@ -11,7 +11,7 @@ NC='\033[0m'
 
 INSTALL_DIR="$HOME/.claude/bin"
 SCRIPT_NAME="claude-prefs"
-REPO="pconcurrently/claude-prefs-cli"
+REPO="pccly/claude-prefs-cli"
 CLONE_DIR="$HOME/.claude/claude-prefs-cli"
 SETTINGS_FILE="$HOME/.claude/settings.json"
 
