@@ -113,49 +113,6 @@ All commands have non-interactive forms that work without a TTY, so Claude Code 
 
 **How it works:** Running `ccp setup` or the installer writes a reference block to `~/.claude/CLAUDE.md` with all available commands. This is loaded into every Claude Code conversation automatically, so Claude Code knows how to use `ccp` without being told.
 
-## How it works
-
-```text
-~/.claude/
-  claude-prefs-cli/       # Cloned repo (source of truth)
-    defaults/
-      memories/            # Bundled default memories
-      skills.json          # Bundled default skills
-    claude-prefs           # The CLI script
-  global-memory/           # Your central memory store
-    feedback_use_pnpm.md
-    feedback_no_em_dash.md
-    ...
-  global-skills.json       # Saved skills list
-  skills/                  # Global skills (shared by all projects)
-  bin/
-    claude-prefs -> ...    # Symlink to the CLI
-    ccp -> ...             # Short alias
-  projects/
-    -Users-you-project-a/
-      memory/              # Per-project memories (synced from global)
-    -Users-you-project-b/
-      memory/
-
-~/my-project/
-  .claude/
-    skills/                # Per-project skills (symlinked from ~/.agents/skills/)
-      conventional-commit -> ~/.agents/skills/conventional-commit
-```
-
-- **Global memories** live in `~/.claude/global-memory/`. These are your source of truth.
-- **Defaults** are bundled in the repo under `defaults/`. Run `defaults load` or `setup` to pull them into global.
-- `setup` loads bundled defaults into the global store. It offers to init the current project afterwards.
-- `init` copies selected memories and symlinks selected skills into the project. It resolves the git root automatically, so you can run it from any subdirectory.
-- `skills install <name>` searches skills.sh, downloads the skill, and adds it to the global list.
-- `skills add` shows a picker to symlink saved skills into both `~/.claude/skills/` (global) and `<project>/.claude/skills/` (current project). Already-downloaded skills are symlinked instantly; only new skills are fetched.
-- `sync all` pushes updates to every project that already has a memory directory.
-- `import all` pulls non-project-specific memories from all projects into global (deduplicates automatically).
-- `list here` shows the current project's memories with sync status (synced, modified locally, local only).
-- **Skills** are managed via [skills.sh](https://skills.sh/) - `claude-prefs` saves your list and installs them with `npx skills add`.
-- **Updates** are checked automatically once per day. Run `ccp update` to pull the latest version and load any new bundled defaults.
-- **Claude Code integration** - install or setup writes a reference to `~/.claude/CLAUDE.md` so Claude Code knows about `ccp` in every project. All commands have non-interactive forms (`ccp add <name>`, `ccp skills add <name>`, `ccp init -y`) that Claude Code can call directly.
-
 ## License
 
 MIT
@@ -176,3 +133,12 @@ Run it locally with:
 cd macos-app
 swift run
 ```
+
+## Documentation
+
+Full project notes live in the CCLY Obsidian vault at `~/Nextcloud/CCLY/Projects/claude-prefs-cli/`:
+
+- **Hub:** `claude-prefs-cli.md` — purpose, install, command reference, architecture, status.
+- **Guide:** `Guide.md` — workflow walkthroughs (importing, init, skills, sync, defaults, memory file format, updating, tips).
+
+Architecture, sync semantics, and detailed workflow walkthroughs live in the vault — this README sticks to install + quick-start + command summary.
